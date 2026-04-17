@@ -1,0 +1,16 @@
+site_name: Thumbnail Study
+site_description: Methods and analysis for thumbnail study publication
+
+nav:
+  - Home: index.md
+  - Methods: methods.md
+  - Data: data.md
+  - Results: results.md
+
+theme:
+  name: material
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true

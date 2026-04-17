@@ -1,9 +1,9 @@
 import pandas as pd
 
 # ================== SETTINGS ==================
-input_file = "data/data2008-2024.csv"   # Change this to your actual file name
+input_file = "data/data2008-2024.csv"   
 output_file = "data/sampled_data.csv"
-n = 50                         # Number of rowsper year
+n = 10                         # Number of rows per year
 # =============================================
 
 # Load the data
