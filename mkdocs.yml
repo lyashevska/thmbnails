@@ -9,8 +9,30 @@ nav:
 
 theme:
   name: material
+  features:
+    - navigation.tabs
+    - navigation.top
+    - navigation.sections
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+  font:
+    text: Source Serif 4
+    code: JetBrains Mono
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
+      toc_depth: 2-4
+
+plugins:
+  - search

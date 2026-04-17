@@ -1,0 +1,71 @@
+/* Improve readability and visual hierarchy for long-form scientific notes. */
+
+:root {
+  --paper-bg: #f7f9f8;
+  --panel-bg: #ffffff;
+  --text-main: #1f2933;
+  --text-muted: #52606d;
+  --rule: #d9e2ec;
+  --brand: #0f766e;
+}
+
+body {
+  background: linear-gradient(180deg, #eef6f4 0%, var(--paper-bg) 280px, var(--paper-bg) 100%);
+}
+
+.md-content {
+  color: var(--text-main);
+}
+
+.md-main__inner {
+  max-width: 1200px;
+}
+
+.md-content__inner {
+  background: var(--panel-bg);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
+  margin-top: 0.8rem;
+  padding: 1.2rem 1.4rem;
+}
+
+.md-typeset h1 {
+  border-bottom: 1px solid var(--rule);
+  color: #102a43;
+  letter-spacing: 0.01em;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.md-typeset h2 {
+  color: #0b5d56;
+  margin-top: 1.8rem;
+}
+
+.md-typeset h3 {
+  color: #1f4f46;
+}
+
+.md-typeset p,
+.md-typeset li {
+  color: var(--text-main);
+  line-height: 1.72;
+}
+
+.md-typeset a {
+  color: var(--brand);
+}
+
+.md-nav--secondary .md-nav__title {
+  color: #0f4f4b;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .md-content__inner {
+    border-radius: 8px;
+    margin-top: 0.4rem;
+    padding: 1rem;
+  }
+}
