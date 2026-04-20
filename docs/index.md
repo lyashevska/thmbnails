@@ -2,18 +2,19 @@
 
 ## Project overview
 
-This documentation tracks methods, data decisions, and results for the thumbnail study.
+Gender and racial stereotypes in pornographic content through thumbnails.
 
 ## Research objective
 
-The primary goal is to understand temporal patterns in thumbnail characteristics and how they relate to publication year.
+The primary objective is to investigate stereotypes in pornographic content through thumbnails.
 
-## Documentation structure
+The framework through which stereotypes can be conceptualized and investigated focuses on the ways in which gender and racial stereotypes are represented. It is grounded in studies on porn consumption, gender (in)equality in porn, racial stereotypes, and research on specific archetypes (e.g., the "teen," the "MILF," the "lotus blossom," the "dragon lady," or the "Jezebel").
 
-- Methods: sampling strategy, preprocessing, and analysis workflow.
-- Data: source table, key fields, and cleaning assumptions.
-- Results: summary metrics, visual findings, and interpretation notes.
+We will collect a large (2000) number of video thumbnails and analyze them using a combination of computer vision techniques (e.g., YOLO for detecting and classifying objects, bodies, poses, clothing, and racial features).
 
-## Reproducibility notes
+The framework currently consists of three main dimensions:
 
-All analytical steps should be written in the Methods section with enough detail to reproduce results from the raw CSV.
+- Depictions of the body / body display
+- Hyperbolic depictions of social scenarios / imaginaries of power
+- Conventions of visual representation and sexual behavior
+
