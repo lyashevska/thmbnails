@@ -3,7 +3,7 @@ import pandas as pd
 # ================== SETTINGS ==================
 input_file = "data/data2008-2024.csv"   
 output_file = "data/sampled_data.csv"
-n = 10                         # Number of rows per year
+n = 100                         # Number of rows per year
 # =============================================
 
 # Load the data
@@ -17,6 +17,13 @@ df['year'] = pd.to_datetime(df['date'], errors='coerce').dt.year
 # Remove any rows where year could not be parsed
 df = df.dropna(subset=['year'])
 df['year'] = df['year'].astype(int)
+
+# Keep only the latest five years available in the dataset.
+latest_year = df['year'].max()
+cutoff_year = latest_year - 4
+df = df[df['year'] >= cutoff_year]
+
+print(f"Sampling years {cutoff_year}-{latest_year}")
 
 # Sample n rows per year
 sampled = []
