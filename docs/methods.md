@@ -20,7 +20,7 @@ For the final dataset, three additional columns were appended:
 - `thumbnail_path` (local relative path to the downloaded file)  
 - `thumbnail_success` (boolean indicating successful acquisition)  
 
-This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset was exported as `sampled_with_thumbnails.csv`. A success rate of **48.2%** was achieved using the hybrid CDN → OG fallback approach.
+This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset was exported as `sampled_with_thumbnails.csv`. A success rate of **89.1%** was achieved using the hybrid CDN → OG fallback approach across 2500 sampled videos (500 per year, 2020–2024).
 
 ### Resume and Checkpointing
 
