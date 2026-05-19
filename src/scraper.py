@@ -11,15 +11,20 @@ input_file = "data/sampled_data.csv"
 output_file = "data/sampled_with_thumbnails.csv"
 thumbnail_dir = Path("data/thumbnails")
 delay = 2.0                    # Increased for safety
+CHECKPOINT_EVERY = 10          # flush output CSV after every N rows
 # =============================================
 
 thumbnail_dir.mkdir(exist_ok=True)
 
-df = pd.read_csv(input_file)
-
-df['thumbnail_url'] = None
-df['thumbnail_path'] = None
-df['thumbnail_success'] = False
+if Path(output_file).exists():
+    df = pd.read_csv(output_file)
+    already_done = int(df['thumbnail_success'].sum())
+    print(f"Resuming: {already_done}/{len(df)} thumbnails already downloaded")
+else:
+    df = pd.read_csv(input_file)
+    df['thumbnail_url'] = None
+    df['thumbnail_path'] = None
+    df['thumbnail_success'] = False
 
 session = requests.Session()
 session.headers.update({'User-Agent': 'Mozilla/5.0 (compatible; ResearchBot/1.0)'})
@@ -27,14 +32,25 @@ session.headers.update({'User-Agent': 'Mozilla/5.0 (compatible; ResearchBot/1.0)
 print("Starting Hybrid Thumbnail Downloader (CDN → OG fallback)...\n")
 
 for idx, row in tqdm(df.iterrows(), total=len(df), desc="Downloading thumbnails"):
+    # Skip rows already successfully downloaded
+    if df.at[idx, 'thumbnail_success'] == True:
+        continue
+
     url = str(row['url'])
-    
+
     viewkey_match = re.search(r'viewkey=([a-zA-Z0-9]+)', url)
     if not viewkey_match:
         continue
     viewkey = viewkey_match.group(1)
-    
+
     thumbnail_path = thumbnail_dir / f"{viewkey}.jpg"
+
+    # File exists on disk but CSV was not flushed on previous run
+    if thumbnail_path.exists():
+        df.at[idx, 'thumbnail_path'] = str(thumbnail_path)
+        df.at[idx, 'thumbnail_success'] = True
+        continue
+
     downloaded = False
 
     # Strategy 1: Try Direct CDN first (fast but often fails)
@@ -68,6 +84,9 @@ for idx, row in tqdm(df.iterrows(), total=len(df), desc="Downloading thumbnails"
                         downloaded = True
         except:
             pass
+
+    if (idx + 1) % CHECKPOINT_EVERY == 0:
+        df.to_csv(output_file, index=False)
 
     time.sleep(delay)
 

@@ -3,7 +3,7 @@ import pandas as pd
 # ================== SETTINGS ==================
 input_file = "data/data2008-2024.csv"   
 output_file = "data/sampled_data.csv"
-n = 100                         # Number of rows per year
+n = 500                         # Number of rows per year
 # =============================================
 
 # Load the data

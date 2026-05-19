@@ -20,7 +20,13 @@ For the final dataset, three additional columns were appended:
 - `thumbnail_path` (local relative path to the downloaded file)  
 - `thumbnail_success` (boolean indicating successful acquisition)  
 
-This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset was exported as `sampled_with_thumbnails.csv`. A success rate of **48.2%** was achieved using the hybrid CDN → OG fallback approach.
+This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset was exported as `sampled_with_thumbnails.csv`. A success rate of **89.1%** was achieved using the hybrid CDN → OG fallback approach across 2500 sampled videos (500 per year, 2020–2024).
+
+### Resume and Checkpointing
+
+The scraper supports stopping and resuming without losing progress. On startup, if `sampled_with_thumbnails.csv` already exists, it is loaded as the working dataset and previously successful rows are skipped entirely — no repeat network requests are made. Additionally, if a thumbnail image file is found on disk but the CSV was not yet flushed (e.g. due to a crash), the row is recovered from disk rather than re-downloaded.
+
+Progress is flushed to `sampled_with_thumbnails.csv` every 10 rows during the run, so an interruption (network failure, manual stop, system crash) loses at most 10 rows of work. The interval is controlled by the `CHECKPOINT_EVERY` constant in `src/scraper.py`.
 
 **Note on Data Limitations**  
 Some videos in the dataset were disabled or still processing at the time of scraping. These videos either contained **no thumbnail** or returned Pornhub’s generic placeholder image (“This video is still converting”). These issues will be addressed in a subsequent phase of data cleaning and validation.
