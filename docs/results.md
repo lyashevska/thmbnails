@@ -24,3 +24,28 @@ A thumbnail was classified as **valid** if it was successfully retrieved and its
 - The placeholder rate declined consistently from 26.4% in 2020 to 6.2% in 2024, suggesting that more recent videos are less likely to have been taken down.
 - **2024** had the highest valid thumbnail rate (79.6%) despite also having the highest not-retrieved rate (14.2%), because very few 2024 videos returned placeholder images.
 - Invalid thumbnails (not retrieved + placeholder) will be excluded from subsequent visual analysis.
+
+## Visual Analysis Pipeline (Current Ollama Workflow)
+
+A dedicated VLM annotation stage is currently run through `src/vlm_annotate.py`.
+
+- Prompt-driven JSON annotation using a local Ollama-served VLM.
+- Resumable behavior via per-image output checks (`--force` to rerun).
+- Auditable logs through per-image JSON, `.raw.txt` failure sidecars, and JSONL run metadata.
+- Prompt includes the target schema and research framing from `prompt`.
+- Hand-curated reference examples in `docs/reference_annotations/` are retained for calibration and later human validation.
+
+Initial reference annotations (manually authored for prompt calibration and evaluation targets) cover:
+- A commercial "slutty teen DP threesome" gonzo thumbnail (high genital salience, male-dominant, brand text).
+- An "exotic Asia" orientalist solo (racialized fantasy, jewelry/body adornment codes, low genital focus).
+
+Current output locations:
+- `data/annotations_ollama/<image_id>.json` (parseable model JSON)
+- `data/annotations_ollama/<image_id>.raw.txt` (raw text when JSON parse fails)
+- `data/annotations_ollama.jsonl` (run log with metadata and success flags)
+
+For current Ollama annotation runs, thumbnails smaller than 4 KB are skipped before inference.
+
+Note: the retrieval table above uses the earlier 3.6 KB validity threshold from the acquisition stage.
+
+This current workflow is optimized for fast pilot iteration and traceability.

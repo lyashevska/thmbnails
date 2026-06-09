@@ -5,3 +5,16 @@ pandas==3.0.2
 pathlib==1.0.1
 python-dateutil==2.9.0.post0
 six==1.17.0
+
+# Visual analysis (Qwen3-VL)
+# Core
+pillow
+# For Qwen3-VL (see src/analyze_thumbnails.py and README)
+# pip install -U "transformers>=4.57" qwen-vl-utils
+# Recommended: torch torchvision --index-url https://download.pytorch.org/whl/cu121  (match your CUDA)
+# Optional low-VRAM:
+# bitsandbytes
+# Optional speed (CUDA Linux):
+# flash-attn --no-build-isolation
+# For quick start alternative (no torch): ollama (see README) + openai package
+ollama
