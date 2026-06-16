@@ -193,8 +193,10 @@ def main() -> None:
         return
 
     system_prompt = load_prompt_from_file()
+    run_start = time.perf_counter()
     success = 0
     failed = 0
+    total_request_seconds = 0.0
 
     with open(results_path, "a", encoding="utf-8") as jl:
         for idx, row in enumerate(to_process, start=1):
@@ -216,8 +218,10 @@ def main() -> None:
                 "success": False,
                 "annotation": None,
                 "raw_output": None,
+                "request_seconds": None,
             }
 
+            request_start = time.perf_counter()
             try:
                 parsed, raw = request_annotation(
                     model=args.model,
@@ -232,6 +236,9 @@ def main() -> None:
                 parsed = None
                 raw = f"REQUEST_ERROR: {exc}"
                 record["raw_output"] = raw
+            request_seconds = time.perf_counter() - request_start
+            record["request_seconds"] = round(request_seconds, 3)
+            total_request_seconds += request_seconds
 
             if parsed is None:
                 raw_path.write_text(raw, encoding="utf-8")
@@ -250,6 +257,14 @@ def main() -> None:
     print("\nRun complete")
     print(f"Success: {success}")
     print(f"Failed:  {failed}")
+    processed = success + failed
+    elapsed = time.perf_counter() - run_start
+    avg_per_image = (elapsed / processed) if processed else 0.0
+    avg_request = (total_request_seconds / processed) if processed else 0.0
+    print(f"Processed: {processed}")
+    print(f"Elapsed: {elapsed:.2f}s")
+    print(f"Avg/image (end-to-end): {avg_per_image:.2f}s")
+    print(f"Avg/image (model request): {avg_request:.2f}s")
     print(f"JSON outputs: {out_dir.resolve()}")
     print(f"Run log: {results_path.resolve()}")
 
