@@ -49,11 +49,53 @@ python src/vlm_annotate.py --limit 3 --force
 - Some outputs may deviate from the intended schema in prompt.
 - For pilot runs, spot-check files manually before scaling.
 
-## Optional Advanced Path
+## DINOv3 Visual Feature Extraction
 
-Optional stricter backend: src/analyze_thumbnails.py (Transformers/Hugging Face).
+### Overview
 
-Use this if you want tighter schema control and a heavier research pipeline setup.
+DINOv3 is a self-supervised vision transformer model used for extracting robust visual features from thumbnails. This pipeline supports visual clustering, content-based deduplication, and feature analysis without requiring labels.
+
+### Why DINOv3?
+
+- **Domain-sensitive**: Captures fine-grained distinctions in poses, body types, acts, angles, nudity levels, and quality tiers
+- **Self-supervised**: No labeled data required; learns universal visual features
+- **Flexible**: Use CLS token for global clustering or patch tokens for dense analysis
+- **Efficient**: Fast inference even on consumer hardware for medium datasets (2k–10k images)
+
+### Preprocessing Pipeline
+
+The DINOv3 preprocessing pipeline handles image validation and normalization:
+
+**Location**: [src/dinov3/preprocess.py](src/dinov3/preprocess.py)
+
+**Pipeline steps**:
+1. **Filter invalid / placeholder files** – Checks file size (minimum 4 KB by default) and dimensions (640×360 for thumbnails)
+2. **Convert to RGB** – Handles various image formats
+3. **Letterbox to square** – Preserves 16:9 composition without distortion; fills padding with black (0, 0, 0)
+4. **Resize to model input** – 224px for CLS token, 518px for patch token extraction
+
+**Valid thumbnail criteria** (from [src/dinov3/preprocess.py](src/dinov3/preprocess.py)):
+- File exists and is readable
+- Size ≥ 4096 bytes
+- Dimensions = 640×360 px
+
+Outputs: PIL Image objects ready for DINOv3 model inference.
+
+### Model Selection & Hardware
+
+ViT-L/16 distilled (300M params)
+
+| Model | Parameters | VRAM | Use Case |
+|-------|-----------|------|----------|
+| ViT-S/S+ | 21–50M | 1–3 GB | Rapid prototyping, CPU-friendly |
+| ViT-B/ConvNeXt Base | 86–89M | 3–6 GB | Laptop; good balance |
+| **ViT-L/ConvNeXt Large** | **198–300M** | **8–12 GB** | Best quality/speed tradeoff |
+| ViT-H+ | 840M | 20–30+ GB | High-end machines only |
+
+**Estimated runtime** (ViT-L, GPU):
+- 2,000 images: 3–8 minutes
+- 10,000 images: 15–40 minutes
+
 
 ## Reference Annotations
 
