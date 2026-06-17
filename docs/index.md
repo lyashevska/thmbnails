@@ -18,3 +18,5 @@ The framework currently consists of three main dimensions:
 - Hyperbolic depictions of social scenarios / imaginaries of power
 - Conventions of visual representation and sexual behavior
 
+In addition to the prompt-driven annotation workflow, the project now includes a DINOv3 embedding pipeline for label-free visual analysis, similarity search, and clustering over the same thumbnail corpus.
+
