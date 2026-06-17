@@ -96,6 +96,41 @@ ViT-L/16 distilled (300M params)
 - 2,000 images: 3–8 minutes
 - 10,000 images: 15–40 minutes
 
+### Embedding Extraction
+
+Install DINOv3 dependencies (requires a [Hugging Face token](https://huggingface.co/settings/tokens) with access to gated DINOv3 models):
+
+```bash
+pip install -r requirements-dinov3.txt
+huggingface-cli login
+```
+
+Preview letterbox preprocessing:
+
+```bash
+python src/inspect_dinov3_preprocess.py --limit 10 --seed 42
+```
+
+Extract CLS embeddings (resumable; skips existing `vectors/<image_id>.npy`):
+
+```bash
+python src/dinov3/extract_embeddings.py --dry-run --limit 10
+python src/dinov3/extract_embeddings.py --limit 5
+python src/dinov3/extract_embeddings.py
+```
+
+Validate a run:
+
+```bash
+python src/dinov3/check_embeddings.py --run-id <run_id>
+```
+
+Outputs under `data/dinov3_embeddings/<run_id>/`:
+- `vectors/<image_id>.npy` — per-image CLS vectors (resume checkpoints)
+- `cls_embeddings.npy` — stacked matrix `(N, D)`
+- `image_ids.json` — row order
+- `manifest.json` — model and run metadata
+
 
 ## Reference Annotations
 
