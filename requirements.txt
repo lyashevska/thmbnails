@@ -13,3 +13,7 @@ torchvision
 transformers>=4.57
 accelerate
 safetensors
+scikit-learn
+umap-learn
+hdbscan
+matplotlib

@@ -146,3 +146,19 @@ Outputs under `data/dinov3_embeddings/<run_id>/`:
 - `image_ids.json` — row order
 - `manifest.json` — model and run metadata
 
+### Clustering
+
+Cluster CLS embeddings with PCA → UMAP → HDBSCAN:
+
+```bash
+python src/dinov3/cluster_embeddings.py --embeddings-run-id <run_id>
+python src/dinov3/cluster_embeddings.py   # uses latest embedding run
+```
+
+Outputs under `data/dinov3_clusters/<run_id>/`:
+- `cluster_assignments.csv` — `image_id`, `cluster_id`, `year`, `title`, UMAP coords
+- `cluster_summary.csv` — cluster sizes
+- `umap.png` — 2D visualization
+- `samples/cluster_<id>/` — example thumbnails + `_grid.jpg` per cluster
+- `manifest.json` — hyperparameters and counts
+
