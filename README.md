@@ -101,7 +101,7 @@ ViT-L/16 distilled (300M params)
 Install DINOv3 dependencies (requires a [Hugging Face token](https://huggingface.co/settings/tokens) with access to gated DINOv3 models):
 
 ```bash
-pip install -r requirements-dinov3.txt
+pip install -r requirements.txt
 huggingface-cli login
 ```
 
@@ -111,19 +111,34 @@ Preview letterbox preprocessing:
 python src/inspect_dinov3_preprocess.py --limit 10 --seed 42
 ```
 
-Extract CLS embeddings (resumable; skips existing `vectors/<image_id>.npy`):
+Extract CLS embeddings for valid thumbnails. The script is resumable and skips any already written `vectors/<image_id>.npy` files unless you pass `--force`:
 
 ```bash
+# Dry run: show what would be processed
 python src/dinov3/extract_embeddings.py --dry-run --limit 10
+
+# Small real run
 python src/dinov3/extract_embeddings.py --limit 5
+
+# Full run
 python src/dinov3/extract_embeddings.py
+
+# Resume into an existing run directory
+python src/dinov3/extract_embeddings.py --run-id 20260616T160746Z
 ```
 
-Validate a run:
+Validate the results after extraction. This checks that the matrix and ID list match, that embeddings are finite, and prints vector norms plus random cosine similarities:
 
 ```bash
 python src/dinov3/check_embeddings.py --run-id <run_id>
+python src/dinov3/check_embeddings.py --run-dir data/dinov3_embeddings/<run_id>
 ```
+
+A healthy validation run should print:
+- `Embeddings shape: (N, 768)` for ViT-B/16 CLS vectors
+- `Image IDs: N`
+- finite vector norms with no NaN/Inf errors
+- `OK: basic embedding checks passed.`
 
 Outputs under `data/dinov3_embeddings/<run_id>/`:
 - `vectors/<image_id>.npy` — per-image CLS vectors (resume checkpoints)
@@ -131,12 +146,3 @@ Outputs under `data/dinov3_embeddings/<run_id>/`:
 - `image_ids.json` — row order
 - `manifest.json` — model and run metadata
 
-
-## Reference Annotations
-
-Hand-authored calibration examples are in docs/reference_annotations:
-
-- docs/reference_annotations/ph5f89a9c6adc3d.json
-- docs/reference_annotations/661b4074d08da.json
-
-These are useful for prompt calibration and manual quality checks.

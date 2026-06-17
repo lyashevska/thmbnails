@@ -72,3 +72,24 @@ Optional advanced path: `src/analyze_thumbnails.py` (Transformers/Hugging Face b
 Because outputs are cached per image_id, swapping models or prompt versions only requires re-processing the delta (or using `--force`).
 
 Future work may include (a) human inter-annotator agreement study on a stratified subsample, (b) fine-tuning or prompt optimization on the hand-coded examples, (c) aggregation scripts producing year-wise stereotype prevalence tables.
+
+## DINOv3 Visual Feature Extraction
+
+The project also includes a DINOv3-based embedding pipeline for thumbnail-level visual feature extraction. This path is useful for clustering, similarity search, and other label-free analyses where a dense visual representation is preferred over schema-based annotation.
+
+### Method
+- Input: local thumbnail JPGs from `data/thumbnails/` or thumbnail paths recorded in the CSV.
+- Filtering: the pipeline keeps only valid thumbnails, using the same minimum file-size check as the VLM workflow and requiring 640×360 source thumbnails.
+- Preprocessing: thumbnails are converted to RGB, letterboxed to a square canvas, and resized to the model input size before inference.
+- Extraction: `src/dinov3/extract_embeddings.py` loads a Hugging Face DINOv3 checkpoint and writes one CLS embedding per image.
+- Validation: `src/dinov3/check_embeddings.py` verifies that the stacked embedding matrix, image-id list, and model metadata are consistent.
+
+### Outputs
+Embeddings are written under `data/dinov3_embeddings/<run_id>/` and include:
+- `vectors/<image_id>.npy` for resume-friendly per-image checkpoints
+- `cls_embeddings.npy` for the stacked embedding matrix
+- `image_ids.json` for row order
+- `manifest.json` for run metadata
+
+### Interpretation
+DINOv3 embeddings are not human-readable labels. They are continuous feature vectors that can be compared with cosine similarity or used as input to downstream clustering. Higher cosine similarity indicates more similar visual content.

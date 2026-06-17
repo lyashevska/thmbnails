@@ -49,3 +49,24 @@ For current Ollama annotation runs, thumbnails smaller than 4 KB are skipped bef
 Note: the retrieval table above uses the earlier 3.6 KB validity threshold from the acquisition stage.
 
 This current workflow is optimized for fast pilot iteration and traceability.
+
+## DINOv3 Embedding Checks
+
+Embedding validation is performed with `src/dinov3/check_embeddings.py` after a run finishes. A healthy run should report:
+
+- matching counts for the embedding matrix and `image_ids.json`
+- finite vector norms with no NaN or Inf values
+- a CLS embedding shape of `(N, 768)` for the ViT-B/16 checkpoint used in the current pipeline
+- random cosine similarities that are finite and generally higher for visually closer thumbnails
+
+This check is intended as a sanity test, not a formal quality benchmark. With only a few samples, the cosine similarities mainly confirm that the pipeline is producing plausible feature vectors.
+
+## DINOv3 Usage Notes
+
+For exploratory analysis, the embeddings can be used for:
+
+- nearest-neighbor similarity inspection
+- duplicate or near-duplicate detection
+- clustering and UMAP-style visual exploration
+
+The current pipeline keeps per-image vectors on disk so interrupted runs can be resumed without recomputing completed images.
