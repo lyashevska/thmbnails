@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Cluster DINOv3 CLS embeddings with PCA → UMAP → HDBSCAN.
+CLS thumbnail clustering with PCA → UMAP → HDBSCAN (one label per image).
+
+For recurring local visual units (patch motifs), use cluster_patch_motifs.py instead.
+Outputs here are labeled clustering_type=cls_thumbnail for comparison.
 
 Reads a completed embedding run from data/dinov3_embeddings/<run_id>/ and writes:
   cluster_assignments.csv
@@ -37,8 +40,10 @@ from src.dinov3.cluster import (  # noqa: E402
     save_umap_plot,
 )
 from src.dinov3.config import (  # noqa: E402
+    CLS_CLUSTERING_TYPE,
     CLUSTERS_ROOT,
     CSV_DEFAULT,
+    PATCH_MOTIFS_ROOT,
     DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     DEFAULT_HDBSCAN_MIN_SAMPLES,
     DEFAULT_PCA_COMPONENTS,
@@ -124,6 +129,12 @@ def main() -> None:
 
     manifest: Dict[str, Any] = {
         "run_id": run_id,
+        "clustering_type": CLS_CLUSTERING_TYPE,
+        "comparison": {
+            "patch_clustering_type": "patch_motif",
+            "patch_motifs_dir": str(PATCH_MOTIFS_ROOT),
+            "note": "CLS clusters group whole thumbnails; patch motifs group local visual units.",
+        },
         "embeddings_run_id": emb_run_dir.name,
         "embeddings_model": emb_manifest.get("model_id"),
         "embedding_shape": list(embeddings.shape),

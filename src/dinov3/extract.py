@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
+from .config import DEFAULT_PATCH_SIZE
+
 import numpy as np
 from PIL import Image
 
@@ -33,6 +35,16 @@ class Dinov3Bundle:
     processor: "AutoImageProcessor"
     model: "AutoModel"
     cls_size: int
+
+
+@dataclass
+class PatchExtractResult:
+    patches: np.ndarray
+    rows: np.ndarray
+    cols: np.ndarray
+    grid_shape: Tuple[int, int]
+    patch_size: int
+    preprocessed: PreprocessResult
 
 
 def _require_torch() -> None:
@@ -115,3 +127,86 @@ def extract_cls_from_path(
     )
     embedding = extract_cls_from_preprocessed(bundle, preprocessed)
     return embedding, preprocessed
+
+
+def content_row_mask(
+    grid_h: int,
+    *,
+    pad_top_px: int,
+    content_height_px: int,
+    patch_size: int,
+) -> np.ndarray:
+    """True for patch rows whose center falls inside the letterboxed content band."""
+    rows = np.arange(grid_h, dtype=np.int32)
+    centers = (rows + 0.5) * patch_size
+    return (centers >= pad_top_px) & (centers < pad_top_px + content_height_px)
+
+
+def letterbox_content_bounds(preprocessed: PreprocessResult) -> Tuple[int, int]:
+    """Return (pad_top, content_height) in preprocessed target pixels."""
+    square = preprocessed.square_size
+    target = preprocessed.target_size
+    scale = target / square
+    pad_top = int(round(preprocessed.letterbox_pad_top * scale))
+    source_h = preprocessed.source_size[1]
+    content_h = int(round(source_h * (target / square)))
+    return pad_top, content_h
+
+
+def extract_patches_from_preprocessed(
+    bundle: Dinov3Bundle,
+    preprocessed: PreprocessResult,
+) -> PatchExtractResult:
+    pixel_values = pil_to_pixel_values(bundle, preprocessed.image)
+    patch_size = int(bundle.model.config.patch_size)
+    _, _, height, width = pixel_values.shape
+    grid_h, grid_w = height // patch_size, width // patch_size
+
+    with torch.inference_mode():
+        outputs = bundle.model(pixel_values=pixel_values)
+
+    hidden = outputs.last_hidden_state.squeeze(0)
+    num_register = int(getattr(bundle.model.config, "num_register_tokens", 0) or 0)
+    patch_tokens = hidden[1 + num_register :, :].detach().cpu().float().numpy()
+    expected = grid_h * grid_w
+    if patch_tokens.shape[0] != expected:
+        raise ValueError(f"Expected {expected} patch tokens, got {patch_tokens.shape[0]}")
+
+    patch_grid = patch_tokens.reshape(grid_h, grid_w, -1)
+    pad_top, content_h = letterbox_content_bounds(preprocessed)
+    row_mask = content_row_mask(
+        grid_h,
+        pad_top_px=pad_top,
+        content_height_px=content_h,
+        patch_size=patch_size,
+    )
+
+    valid_rows = np.where(row_mask)[0]
+    if len(valid_rows) == 0:
+        raise ValueError("No content patches after letterbox mask")
+    rows = np.repeat(valid_rows, grid_w)
+    cols = np.tile(np.arange(grid_w, dtype=np.int32), len(valid_rows))
+    patches = patch_grid[rows, cols, :]
+    return PatchExtractResult(
+        patches=patches,
+        rows=rows.astype(np.int32),
+        cols=cols.astype(np.int32),
+        grid_shape=(grid_h, grid_w),
+        patch_size=patch_size,
+        preprocessed=preprocessed,
+    )
+
+
+def extract_patches_from_path(
+    bundle: Dinov3Bundle,
+    path: Path,
+    *,
+    patch_size: int = DEFAULT_PATCH_SIZE,
+    min_bytes: int = 4096,
+) -> PatchExtractResult:
+    preprocessed = preprocess_for_dinov3(
+        path,
+        target_size=patch_size,
+        min_bytes=min_bytes,
+    )
+    return extract_patches_from_preprocessed(bundle, preprocessed)
