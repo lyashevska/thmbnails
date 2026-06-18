@@ -22,6 +22,7 @@ from .config import (
     DEFAULT_HDBSCAN_MIN_SAMPLES,
     DEFAULT_PCA_COMPONENTS,
     DEFAULT_PATCH_SIZE,
+    DEFAULT_VIT_PATCH_SIZE,
     DEFAULT_SAMPLES_PER_CLUSTER,
     DEFAULT_UMAP_MIN_DIST,
     DEFAULT_UMAP_NEIGHBORS,
@@ -219,7 +220,7 @@ def save_motif_patch_montages(
     patch_run_dir: Path,
     thumb_dir: Path = THUMB_DIR_DEFAULT,
     samples_per_motif: int = DEFAULT_SAMPLES_PER_CLUSTER,
-    patch_size: int = DEFAULT_PATCH_SIZE,
+    vit_patch_size: int = DEFAULT_VIT_PATCH_SIZE,
     cols: int = 6,
     upscale: int = 8,
 ) -> Dict[str, Any]:
@@ -246,11 +247,11 @@ def save_motif_patch_montages(
                 continue
 
             if image_id not in preprocessed_cache:
-                pre = preprocess_for_dinov3(thumb, target_size=patch_size)
+                pre = preprocess_for_dinov3(thumb, target_size=DEFAULT_PATCH_SIZE)
                 preprocessed_cache[image_id] = pre.image
 
             image = preprocessed_cache[image_id]
-            ps = patch_size
+            ps = vit_patch_size
             r = int(row["patch_row"])
             c = int(row["patch_col"])
             crop = image.crop((c * ps, r * ps, (c + 1) * ps, (r + 1) * ps))

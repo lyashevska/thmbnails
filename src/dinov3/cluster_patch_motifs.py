@@ -30,6 +30,7 @@ from src.dinov3.config import (  # noqa: E402
     DEFAULT_HDBSCAN_MIN_SAMPLES,
     DEFAULT_PCA_COMPONENTS,
     DEFAULT_PATCH_SIZE,
+    DEFAULT_VIT_PATCH_SIZE,
     DEFAULT_SAMPLES_PER_CLUSTER,
     DEFAULT_UMAP_MIN_DIST,
     DEFAULT_UMAP_NEIGHBORS,
@@ -128,7 +129,7 @@ def main() -> None:
         patch_run_dir=patch_run_dir,
         thumb_dir=args.thumb_dir,
         samples_per_motif=args.samples_per_motif,
-        patch_size=DEFAULT_PATCH_SIZE,
+        vit_patch_size=DEFAULT_VIT_PATCH_SIZE,
     )
     print(f"  {out_dir}/motifs/ ({len(sample_info)} motif folders)")
 

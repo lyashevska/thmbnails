@@ -18,7 +18,8 @@ CLUSTERS_ROOT = Path("data/dinov3_clusters")
 # Patch motif clustering (recurring local visual units across the corpus)
 PATCH_CLUSTERING_TYPE = "patch_motif"
 PATCH_MOTIFS_ROOT = Path("data/dinov3_patch_motifs")
-DEFAULT_PATCH_SIZE = 224
+DEFAULT_PATCH_SIZE = 224  # letterboxed image input size
+DEFAULT_VIT_PATCH_SIZE = 16  # ViT-B/16 spatial patch size for crops/montages
 
 # Shared clustering defaults
 DEFAULT_PCA_COMPONENTS = 50
