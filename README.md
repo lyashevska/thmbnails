@@ -146,9 +146,9 @@ Outputs under `data/dinov3_embeddings/<run_id>/`:
 - `image_ids.json` — row order
 - `manifest.json` — model and run metadata
 
-### Clustering
+### CLS thumbnail clustering (`clustering_type: cls_thumbnail`)
 
-Cluster CLS embeddings with PCA → UMAP → HDBSCAN:
+Groups **whole thumbnails** (one label per image). Use this for visual regimes / thumbnail types.
 
 ```bash
 python src/dinov3/cluster_embeddings.py --embeddings-run-id <run_id>
@@ -160,5 +160,31 @@ Outputs under `data/dinov3_clusters/<run_id>/`:
 - `cluster_summary.csv` — cluster sizes
 - `umap.png` — 2D visualization
 - `samples/cluster_<id>/` — example thumbnails + `_grid.jpg` per cluster
-- `manifest.json` — hyperparameters and counts
+- `manifest.json` — `clustering_type: cls_thumbnail`
+
+### Patch motif clustering (`clustering_type: patch_motif`)
+
+Discovers **recurring local visual units** (one label per patch). Compare results against CLS clusters above.
+
+**Step A — extract 224px patch embeddings (letterbox padding rows masked):**
+
+```bash
+python src/dinov3/extract_patch_embeddings.py --embeddings-run-id <cls_run_id> --limit 50
+python src/dinov3/extract_patch_embeddings.py --embeddings-run-id <cls_run_id>
+```
+
+**Step B — cluster patches into motifs:**
+
+```bash
+python src/dinov3/cluster_patch_motifs.py --patch-run-id <patch_run_id>
+```
+
+Outputs under `data/dinov3_patch_motifs/<run_id>/`:
+- `patch_assignments.csv` — every patch: `image_id`, `motif_id`, row/col, UMAP coords
+- `motif_summary.csv` — motif sizes
+- `image_motif_histogram.csv` — motif mix per thumbnail
+- `image_dominant_motif.csv` — top motif per image + metadata
+- `patch_umap.png` — patch-level 2D map
+- `motifs/motif_<id>/_grid.jpg` — example patch crops per motif
+- `manifest.json` — `clustering_type: patch_motif` + pointer to CLS clusters
 

@@ -1,7 +1,10 @@
 # Methods
 
 ## Data sampling
-To obtain a balanced temporal sample from the dataset, a custom script was developed to perform a stratified sample by year. The input dataset was loaded as a pandas DataFrame from a CSV file containing video metadata with a date column in YYYY-MM-DD format.
+
+To obtain a balanced temporal sample from the dataset, `src/sample_per_year.py` performs stratified sampling by year. The input dataset is loaded from `data/data2008-2024.csv` as a pandas DataFrame; years are derived from the `date` column (YYYY-MM-DD). Only the **latest five years present in the source file** are kept (currently 2020–2024).
+
+The current run samples **2,500 videos per year** (`n = 2500` in `src/sample_per_year.py`), producing **12,500 rows** in `data/sampled_data.csv`. An earlier pilot used 500 per year (2,500 total).
 
 ## Thumbnail Acquisition
 
@@ -13,23 +16,31 @@ The first approach attempted to construct the thumbnail URL directly from the vi
 ### Open Graph Meta Tag Extraction (Strategy 2) 
 Due to the instability of the direct CDN method, a second, more robust approach was ultimately adopted as the **primary method**. For each video, the full video page was fetched using the `requests` library. The representative thumbnail URL was then extracted from the `<meta property="og:image">` tag using the BeautifulSoup4 HTML parser. The identified image was subsequently downloaded and stored in the `data/thumbnails/` directory as `{viewkey}.jpg`.  
 
-A fixed delay of 2.0 seconds was enforced between requests in both strategies to avoid excessive server load and respect server constraints.  
+A fixed delay of **5.0 seconds** is enforced between requests (`delay` in `src/scraper.py`) to reduce rate limiting and server load. An earlier pilot used 2.0 seconds.
 
 For the final dataset, three additional columns were appended:  
 - `thumbnail_url` (remote image location)  
 - `thumbnail_path` (local relative path to the downloaded file)  
 - `thumbnail_success` (boolean indicating successful acquisition)  
 
-This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset was exported as `sampled_with_thumbnails.csv`. A success rate of **89.1%** was achieved using the hybrid CDN → OG fallback approach across 2500 sampled videos (500 per year, 2020–2024).
+This explicit linkage enables straightforward correspondence between textual video metadata and its visual thumbnail. The enriched dataset is exported as `data/sampled_with_thumbnails.csv`. Run progress and per-video failures are appended to `data/scraper.log`.
+
+Across the current **12,500-video sample** (2,500 per year, 2020–2024), the hybrid CDN → OG fallback scraper achieved an HTTP retrieval success rate of **87.7%** (10,957/12,500). See [results.md](results.md) for per-year breakdown and placeholder counts.
 
 ### Resume and Checkpointing
 
-The scraper supports stopping and resuming without losing progress. On startup, if `sampled_with_thumbnails.csv` already exists, it is loaded as the working dataset and previously successful rows are skipped entirely — no repeat network requests are made. Additionally, if a thumbnail image file is found on disk but the CSV was not yet flushed (e.g. due to a crash), the row is recovered from disk rather than re-downloaded.
+The scraper supports stopping and resuming without losing progress (`src/scraper.py`).
 
-Progress is flushed to `sampled_with_thumbnails.csv` every 10 rows during the run, so an interruption (network failure, manual stop, system crash) loses at most 10 rows of work. The interval is controlled by the `CHECKPOINT_EVERY` constant in `src/scraper.py`.
+On startup:
+- If `sampled_with_thumbnails.csv` exists, it is loaded as the working dataset and rows with `thumbnail_success=True` are skipped.
+- Any new rows in `sampled_data.csv` that are not yet in the output file are merged in.
+- **Disk reconciliation**: if `{viewkey}.jpg` already exists in `data/thumbnails/` but the CSV still marks the row as failed (e.g. after a partial rsync or crash), the row is marked successful without re-downloading.
 
-**Note on Data Limitations**  
-Some videos in the dataset were disabled or still processing at the time of scraping. These videos either contained **no thumbnail** or returned Pornhub’s generic placeholder image (“This video is still converting”). These issues will be addressed in a subsequent phase of data cleaning and validation.
+During the run, progress is flushed to `sampled_with_thumbnails.csv` every 10 rows (`CHECKPOINT_EVERY`), so an interruption loses at most 10 rows of CSV state. Thumbnail files written to disk are kept regardless.
+
+### Placeholder and invalid thumbnails
+
+Some videos were disabled or still processing at scrape time. These either return **no image** (counted as not retrieved) or Pornhub’s generic placeholder (“This video is still converting”). Placeholders are small JPEGs, typically **1.9–3.7 KB**; downstream pipelines treat files **< 4 KB** as invalid (see `src/dinov3/preprocess.py` and `src/vlm_annotate.py`). Retrieved placeholders are excluded from embedding and VLM analysis even though `thumbnail_success=True` in the acquisition CSV.
 
 ## Visual Annotation with Ollama VLM (Current Workflow)
 

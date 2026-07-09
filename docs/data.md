@@ -5,9 +5,22 @@ This project uses several linked data artifacts across sampling, thumbnail retri
 ## Core tables and files
 
 - `data/data2008-2024.csv` - source metadata table used for sampling
-- `data/sampled_data.csv` - year-stratified sample before thumbnail retrieval
-- `data/sampled_with_thumbnails.csv` - sample augmented with thumbnail URLs and local paths
-- `data/thumbnails/` - downloaded thumbnail images
+- `data/sampled_data.csv` - year-stratified sample before thumbnail retrieval (current: 12,500 rows, 2,500/year for 2020–2024)
+- `data/sampled_with_thumbnails.csv` - sample augmented with thumbnail URLs, local paths, and `thumbnail_success`
+- `data/thumbnails/` - downloaded thumbnail images (`{viewkey}.jpg`; current run: 10,957 files on disk)
+- `data/scraper.log` - append-only scraper run log (checkpoints, failures, final success rate)
+
+### Thumbnail retrieval summary (current run)
+
+| Metric | Count |
+|--------|-------|
+| Sampled | 12,500 |
+| Retrieved (HTTP success) | 10,957 (87.7%) |
+| Not retrieved | 1,543 (12.3%) |
+| Placeholder (< 4 KB) | 2,291 (18.3% of sample) |
+| **Valid for analysis** (≥ 4 KB) | **8,666 (69.3%)** |
+
+Per-year valid counts: 2020 → 1,639; 2021 → 1,655; 2022 → 1,660; 2023 → 1,734; 2024 → 1,978. See [results.md](results.md) for the full table.
 
 ## Annotation outputs
 
