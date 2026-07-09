@@ -42,14 +42,19 @@ from src.dinov3.config import (  # noqa: E402
 from src.dinov3.patch_motifs import (  # noqa: E402
     build_dominant_motif_per_image,
     build_image_motif_histogram,
+    build_metadata_frame,
+    build_motif_image_links,
     build_patch_assignments,
     join_metadata_to_dominant_motifs,
     load_patch_corpus,
     motif_summary,
     run_id_now,
     run_patch_motif_pipeline,
+    save_motif_highlighted_previews,
     save_motif_patch_montages,
+    save_motif_thumbnail_grids,
     save_patch_umap_plot,
+    top_images_per_motif,
 )
 
 
@@ -107,6 +112,14 @@ def main() -> None:
     histogram = build_image_motif_histogram(assignments)
     dominant = build_dominant_motif_per_image(assignments)
     dominant_meta = join_metadata_to_dominant_motifs(dominant, csv_path=args.csv)
+    metadata = build_metadata_frame(assignments["image_id"].unique().tolist(), csv_path=args.csv)
+    motif_links = build_motif_image_links(assignments, histogram, csv_path=args.csv)
+    top_images = top_images_per_motif(
+        histogram,
+        metadata=metadata,
+        assignments=assignments,
+        samples_per_motif=args.samples_per_motif,
+    )
 
     run_id = args.run_id or run_id_now()
     out_dir = args.out_dir / run_id
@@ -116,22 +129,40 @@ def main() -> None:
     summary.to_csv(out_dir / "motif_summary.csv", index=False)
     histogram.to_csv(out_dir / "image_motif_histogram.csv", index=False)
     dominant_meta.to_csv(out_dir / "image_dominant_motif.csv", index=False)
+    motif_links.to_csv(out_dir / "motif_image_links.csv", index=False)
+    top_images.to_csv(out_dir / "motif_top_images.csv", index=False)
     print(f"  {out_dir}/patch_assignments.csv")
+    print(f"  {out_dir}/motif_image_links.csv  (patch → image interpretability table)")
     print(summary.head(15).to_string(index=False))
 
     print("\nStep 4: Patch-level UMAP plot")
     save_patch_umap_plot(assignments, out_dir / "patch_umap.png")
 
-    print("\nStep 5: Motif patch montages")
+    print("\nStep 5: Motif patch crops (local 16x16 units)")
     sample_info = save_motif_patch_montages(
         assignments,
-        out_dir / "motifs",
+        out_dir / "patch_crops",
         patch_run_dir=patch_run_dir,
         thumb_dir=args.thumb_dir,
         samples_per_motif=args.samples_per_motif,
         vit_patch_size=DEFAULT_VIT_PATCH_SIZE,
     )
-    print(f"  {out_dir}/motifs/ ({len(sample_info)} motif folders)")
+    print(f"  {out_dir}/patch_crops/ ({len(sample_info)} motif folders)")
+
+    print("\nStep 6: Full thumbnail grids per motif (CLS-style review)")
+    thumb_sample_info = save_motif_thumbnail_grids(
+        top_images,
+        out_dir / "thumbnail_samples",
+        thumb_dir=args.thumb_dir,
+    )
+    n_highlighted = save_motif_highlighted_previews(
+        top_images,
+        out_dir / "thumbnail_samples",
+        thumb_dir=args.thumb_dir,
+        vit_patch_size=DEFAULT_VIT_PATCH_SIZE,
+    )
+    print(f"  {out_dir}/thumbnail_samples/motif_*/_grid.jpg")
+    print(f"  {out_dir}/thumbnail_samples/highlighted/ ({n_highlighted} boxed previews)")
 
     manifest: Dict[str, Any] = {
         "run_id": run_id,
@@ -152,15 +183,23 @@ def main() -> None:
         "n_images": int(assignments["image_id"].nunique()),
         "n_motifs": n_motifs,
         "n_noise_patches": n_noise,
-        "motif_sample_info": sample_info,
+        "patch_crop_info": sample_info,
+        "thumbnail_sample_info": thumb_sample_info,
+        "highlighted_previews": n_highlighted,
+        "interpretation": {
+            "start_here": "thumbnail_samples/motif_*/_grid.jpg",
+            "patch_to_image_table": "motif_image_links.csv",
+            "top_images_per_motif": "motif_top_images.csv",
+            "local_patch_crops": "patch_crops/motif_*/_grid.jpg",
+        },
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    print("\nStep 6: Manifest written")
+    print("\nStep 7: Manifest written")
     print(f"  {out_dir}/manifest.json")
     print(
-        "\nDone. Compare patch motifs here with CLS thumbnail clusters in "
-        f"{CLUSTERS_ROOT}/"
+        "\nDone. Start review at thumbnail_samples/motif_*/_grid.jpg, "
+        f"then compare with CLS clusters in {CLUSTERS_ROOT}/"
     )
 
 
