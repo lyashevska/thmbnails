@@ -22,6 +22,7 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
+from typing import Optional
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -39,6 +40,7 @@ from src.dinov3.config import (  # noqa: E402
 )
 from src.dinov3.extract import extract_cls_from_path, load_dinov3  # noqa: E402
 from src.dinov3.preprocess import DEFAULT_MIN_BYTES, is_valid_thumbnail  # noqa: E402
+from src.dinov3.timing import format_duration  # noqa: E402
 
 CHECKPOINT_EVERY = 25
 
@@ -136,9 +138,17 @@ def main() -> None:
             print(f"... and {len(to_process) - 10} more")
         return
 
+    model_load_seconds: Optional[float] = None
+    inference_seconds: Optional[float] = None
+    device_name: Optional[str] = None
+    ok = 0
+    failed = 0
+    n_to_process = len(to_process)
+
     if not to_process:
         print("Nothing to do.")
     else:
+        load_start = time.perf_counter()
         try:
             bundle = load_dinov3(args.model, device=args.device, cls_size=args.cls_size)
         except OSError as exc:
@@ -148,11 +158,14 @@ def main() -> None:
                     "then run: huggingface-cli login"
                 )
             raise SystemExit(1) from exc
-        print(f"Model: {bundle.model_id}  device: {bundle.device}  cls_size: {bundle.cls_size}")
+        model_load_seconds = time.perf_counter() - load_start
+        device_name = str(bundle.device)
+        print(
+            f"Model: {bundle.model_id}  device: {bundle.device}  cls_size: {bundle.cls_size}  "
+            f"load={model_load_seconds:.1f}s"
+        )
 
-        ok = 0
-        failed = 0
-        start = time.perf_counter()
+        infer_start = time.perf_counter()
 
         for i, row in enumerate(to_process, start=1):
             image_id = row["image_id"]
@@ -169,14 +182,22 @@ def main() -> None:
 
             if i % CHECKPOINT_EVERY == 0:
                 ids = load_completed_ids(vectors_dir)
-                save_manifest(
-                    run_dir / "manifest.json",
-                    _build_manifest(args, run_id, ids, ok, failed, partial=True),
+                manifest = _build_manifest(args, run_id, ids, ok, failed, partial=True)
+                manifest["model_timing"] = _model_timing_dict(
+                    model_load_seconds=model_load_seconds,
+                    inference_seconds=time.perf_counter() - infer_start,
+                    device=device_name,
+                    images_in_run=len(to_process),
+                    ok=ok,
                 )
+                save_manifest(run_dir / "manifest.json", manifest)
                 print(f"  checkpoint ({len(ids)} vectors saved)")
 
-        elapsed = time.perf_counter() - start
-        print(f"Extraction finished: ok={ok} failed={failed} elapsed={elapsed:.1f}s")
+        inference_seconds = time.perf_counter() - infer_start
+        print(
+            f"Extraction finished: ok={ok} failed={failed} "
+            f"inference={format_duration(inference_seconds)}"
+        )
 
     image_ids = load_completed_ids(vectors_dir)
     if not image_ids:
@@ -190,9 +211,47 @@ def main() -> None:
     manifest = _build_manifest(args, run_id, image_ids, len(image_ids), 0, partial=False)
     manifest["embedding_shape"] = list(stacked.shape)
     manifest["embedding_dim"] = int(stacked.shape[1])
+    if model_load_seconds is not None or inference_seconds is not None:
+        manifest["model_timing"] = _model_timing_dict(
+            model_load_seconds=model_load_seconds,
+            inference_seconds=inference_seconds,
+            device=device_name,
+            images_in_run=n_to_process,
+            ok=ok if n_to_process else len(image_ids),
+        )
     save_manifest(run_dir / "manifest.json", manifest)
 
     print(f"Saved cls_embeddings.npy {stacked.shape} and {len(image_ids)} IDs")
+    if inference_seconds is not None:
+        timing = manifest["model_timing"]
+        print(
+            f"Model timing: load={timing['model_load_seconds']}s  "
+            f"inference={timing['inference_human']}  "
+            f"{timing['seconds_per_image']}s/image"
+        )
+
+
+def _model_timing_dict(
+    *,
+    model_load_seconds: Optional[float],
+    inference_seconds: Optional[float],
+    device: Optional[str],
+    images_in_run: int,
+    ok: int,
+) -> Dict[str, Any]:
+    timing: Dict[str, Any] = {}
+    if device:
+        timing["device"] = device
+    if model_load_seconds is not None:
+        timing["model_load_seconds"] = round(model_load_seconds, 2)
+    if inference_seconds is not None:
+        timing["inference_seconds"] = round(inference_seconds, 2)
+        timing["inference_human"] = format_duration(inference_seconds)
+        if ok > 0:
+            timing["seconds_per_image"] = round(inference_seconds / ok, 3)
+    timing["images_processed_this_run"] = images_in_run
+    timing["images_ok_this_run"] = ok
+    return timing
 
 
 def _build_manifest(

@@ -33,6 +33,15 @@ python src/dinov3/extract_embeddings.py \
   --limit 10
 ```
 
+### Model inference timing
+
+Each CLS embedding run records DINOv3 model time in `manifest.json` → `model_timing`:
+
+- `model_load_seconds` — one-time model load to GPU/CPU
+- `inference_seconds` / `inference_human` — forward passes this run (excludes load)
+- `seconds_per_image` — inference / successful images
+- `device` — e.g. `cuda:0` or `cpu`
+
 ### Cluster CLS thumbnails
 
 Recommended starting point (from parameter sweep on pilot data; re-tune on full corpus):
