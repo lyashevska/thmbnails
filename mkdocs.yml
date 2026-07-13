@@ -6,6 +6,7 @@ nav:
   - Methods: methods.md
   - Data: data.md
   - Results: results.md
+  - DINOv3 runs: dinov3_runs.md
 
 theme:
   name: material

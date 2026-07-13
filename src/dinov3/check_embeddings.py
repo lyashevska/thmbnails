@@ -18,7 +18,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.dinov3.config import EMBEDDINGS_ROOT  # noqa: E402
+from src.dinov3.config import EMBEDDINGS_ROOT, expected_cls_dim  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,10 +61,18 @@ def main() -> None:
     embeddings = np.load(emb_path)
     image_ids = json.loads(ids_path.read_text(encoding="utf-8"))
 
+    manifest: dict = {}
     print(f"Run: {run_dir}")
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        print(f"Model: {manifest.get('model_id')}  cls_size: {manifest.get('cls_size')}")
+        model_id = manifest.get("model_id", "unknown")
+        print(f"Model: {model_id}  cls_size: {manifest.get('cls_size')}")
+        expected_dim = manifest.get("embedding_dim") or expected_cls_dim(str(model_id))
+        if expected_dim and embeddings.shape[1] != int(expected_dim):
+            print(
+                f"ERROR: embedding dim {embeddings.shape[1]} != expected {expected_dim} for {model_id}"
+            )
+            sys.exit(1)
 
     print(f"Embeddings shape: {embeddings.shape}")
     print(f"Image IDs: {len(image_ids)}")
