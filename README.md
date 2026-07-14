@@ -83,14 +83,14 @@ Outputs: PIL Image objects ready for DINOv3 model inference.
 
 ### Model Selection & Hardware
 
-ViT-L/16 distilled (300M params)
+**Default on `feature/dinov3-vitl-cls`:** ViT-L/16 (`facebook/dinov3-vitl16-pretrain-lvd1689m`, 300M params, 1024-dim CLS).
 
-| Model | Parameters | VRAM | Use Case |
-|-------|-----------|------|----------|
-| ViT-S/S+ | 21–50M | 1–3 GB | Rapid prototyping, CPU-friendly |
-| ViT-B/ConvNeXt Base | 86–89M | 3–6 GB | Laptop; good balance |
-| **ViT-L/ConvNeXt Large** | **198–300M** | **8–12 GB** | Best quality/speed tradeoff |
-| ViT-H+ | 840M | 20–30+ GB | High-end machines only |
+| Model | Parameters | CLS dim | VRAM | Use Case |
+|-------|-----------|---------|------|----------|
+| ViT-S/S+ | 21–50M | 384 | 1–3 GB | Rapid prototyping, CPU-friendly |
+| ViT-B/16 | 86M | 768 | 3–6 GB | Laptop smoke tests (`--model` override) |
+| **ViT-L/16** | **300M** | **1024** | **8–12 GB** | **Production CLS runs (default)** |
+| ViT-H+ | 840M | 1280 | 20–30+ GB | High-end machines only |
 
 **Estimated runtime** (ViT-L, GPU):
 - 2,000 images: 3–8 minutes
@@ -111,21 +111,33 @@ Preview letterbox preprocessing:
 python src/inspect_dinov3_preprocess.py --limit 10 --seed 42
 ```
 
-Extract CLS embeddings for valid thumbnails. The script is resumable and skips any already written `vectors/<image_id>.npy` files unless you pass `--force`:
+Extract CLS embeddings for valid thumbnails (currently **~8,666** images ≥ 4 KB in `data/sampled_with_thumbnails.csv`). The script is resumable and skips any already written `vectors/<image_id>.npy` files unless you pass `--force`:
 
 ```bash
 # Dry run: show what would be processed
 python src/dinov3/extract_embeddings.py --dry-run --limit 10
 
-# Small real run
-python src/dinov3/extract_embeddings.py --limit 5
+# Small real run (ViT-L default)
+python src/dinov3/extract_embeddings.py --limit 20
 
-# Full run
+# Full run (~8.6k valid thumbnails; use GPU / HPC)
 python src/dinov3/extract_embeddings.py
 
 # Resume into an existing run directory
-python src/dinov3/extract_embeddings.py --run-id 20260616T160746Z
+python src/dinov3/extract_embeddings.py --run-id <run_id>
+
+# Laptop smoke test with ViT-B/16
+python src/dinov3/extract_embeddings.py \
+  --model facebook/dinov3-vitb16-pretrain-lvd1689m --limit 10
 ```
+
+Archive old ViT-B pilot outputs before a full ViT-L run:
+
+```bash
+bash scripts/archive_dinov3_vitb_pilot.sh
+```
+
+See [docs/dinov3_runs.md](docs/dinov3_runs.md) for run IDs and clustering notes.
 
 Validate the results after extraction. This checks that the matrix and ID list match, that embeddings are finite, and prints vector norms plus random cosine similarities:
 
@@ -135,7 +147,7 @@ python src/dinov3/check_embeddings.py --run-dir data/dinov3_embeddings/<run_id>
 ```
 
 A healthy validation run should print:
-- `Embeddings shape: (N, 768)` for ViT-B/16 CLS vectors
+- `Embeddings shape: (N, 1024)` for ViT-L/16 CLS vectors (768 for ViT-B/16)
 - `Image IDs: N`
 - finite vector norms with no NaN/Inf errors
 - `OK: basic embedding checks passed.`
@@ -153,6 +165,10 @@ Groups **whole thumbnails** (one label per image). Use this for visual regimes /
 ```bash
 python src/dinov3/cluster_embeddings.py --embeddings-run-id <run_id>
 python src/dinov3/cluster_embeddings.py   # uses latest embedding run
+
+# Starting point for full corpus (tune after inspecting umap.png):
+python src/dinov3/cluster_embeddings.py \
+  --hdbscan-min-cluster-size 3 --hdbscan-min-samples 1 --umap-neighbors 30
 ```
 
 Outputs under `data/dinov3_clusters/<run_id>/`:

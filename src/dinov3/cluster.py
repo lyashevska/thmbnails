@@ -101,17 +101,27 @@ def load_embedding_run(run_dir: Path) -> Tuple[np.ndarray, List[str], Dict[str, 
     return embeddings, image_ids, manifest
 
 
+CLUSTER_METHODS = ("hdbscan", "kmeans", "agglomerative")
+
+
 def run_cluster_pipeline(
     embeddings: np.ndarray,
     *,
+    method: str = "hdbscan",
     pca_components: int = DEFAULT_PCA_COMPONENTS,
     umap_neighbors: int = DEFAULT_UMAP_NEIGHBORS,
     umap_min_dist: float = DEFAULT_UMAP_MIN_DIST,
     hdbscan_min_cluster_size: int = DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     hdbscan_min_samples: int = DEFAULT_HDBSCAN_MIN_SAMPLES,
+    hdbscan_selection_method: str = "leaf",
+    n_clusters: int | None = None,
     seed: int = 42,
+    compute_umap: bool = True,
 ) -> ClusterPipelineResult:
     _require_cluster_deps()
+
+    if method not in CLUSTER_METHODS:
+        raise ValueError(f"Unknown method {method!r}; choose from {CLUSTER_METHODS}")
 
     n_samples, n_features = embeddings.shape
     n_components = min(pca_components, n_samples, n_features)
@@ -120,25 +130,42 @@ def run_cluster_pipeline(
     pca_embeddings = pca.fit_transform(embeddings)
     explained = float(np.sum(pca.explained_variance_ratio_))
 
-    reducer = umap.UMAP(
-        n_neighbors=umap_neighbors,
-        min_dist=umap_min_dist,
-        n_components=2,
-        metric="cosine",
-        random_state=seed,
-    )
-    umap_2d = reducer.fit_transform(pca_embeddings)
+    if compute_umap:
+        reducer = umap.UMAP(
+            n_neighbors=umap_neighbors,
+            min_dist=umap_min_dist,
+            n_components=2,
+            metric="cosine",
+            random_state=seed,
+        )
+        umap_2d = reducer.fit_transform(pca_embeddings)
+    else:
+        umap_2d = np.zeros((n_samples, 2), dtype=np.float64)
 
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=hdbscan_min_cluster_size,
-        min_samples=hdbscan_min_samples,
-        metric="euclidean",
-        cluster_selection_method="leaf",
-    )
-    labels = clusterer.fit_predict(pca_embeddings)
-    probabilities = clusterer.probabilities_
-    if probabilities is None:
-        probabilities = np.zeros(len(labels), dtype=np.float64)
+    if method == "hdbscan":
+        clusterer = hdbscan.HDBSCAN(
+            min_cluster_size=hdbscan_min_cluster_size,
+            min_samples=hdbscan_min_samples,
+            metric="euclidean",
+            cluster_selection_method=hdbscan_selection_method,
+        )
+        labels = clusterer.fit_predict(pca_embeddings)
+        probabilities = clusterer.probabilities_
+        if probabilities is None:
+            probabilities = np.zeros(len(labels), dtype=np.float64)
+    else:
+        if n_clusters is None or n_clusters < 2:
+            raise ValueError(f"{method} requires --n-clusters >= 2")
+        if method == "kmeans":
+            from sklearn.cluster import KMeans
+
+            model = KMeans(n_clusters=n_clusters, random_state=seed, n_init=10)
+        else:
+            from sklearn.cluster import AgglomerativeClustering
+
+            model = AgglomerativeClustering(n_clusters=n_clusters, linkage="ward")
+        labels = model.fit_predict(pca_embeddings)
+        probabilities = np.ones(len(labels), dtype=np.float64)
 
     return ClusterPipelineResult(
         labels=labels,
