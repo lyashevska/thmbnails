@@ -69,6 +69,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--umap-min-dist", type=float, default=DEFAULT_UMAP_MIN_DIST)
     p.add_argument("--hdbscan-min-cluster-size", type=int, default=30)
     p.add_argument("--hdbscan-min-samples", type=int, default=3)
+    p.add_argument(
+        "--hdbscan-selection-method",
+        choices=("eom", "leaf"),
+        default="eom",
+        help="HDBSCAN cluster_selection_method (eom = fewer motifs, leaf = more micro-motifs).",
+    )
     p.add_argument("--samples-per-motif", type=int, default=DEFAULT_SAMPLES_PER_CLUSTER)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--run-id", default=None)
@@ -99,6 +105,7 @@ def main() -> None:
         umap_min_dist=args.umap_min_dist,
         hdbscan_min_cluster_size=args.hdbscan_min_cluster_size,
         hdbscan_min_samples=args.hdbscan_min_samples,
+        hdbscan_selection_method=args.hdbscan_selection_method,
         seed=args.seed,
     )
     n_motifs = len(set(result.labels)) - (1 if -1 in result.labels else 0)
@@ -178,6 +185,7 @@ def main() -> None:
         "explained_variance_ratio": result.explained_variance_ratio,
         "hdbscan_min_cluster_size": args.hdbscan_min_cluster_size,
         "hdbscan_min_samples": args.hdbscan_min_samples,
+        "hdbscan_selection_method": args.hdbscan_selection_method,
         "seed": args.seed,
         "n_patches": int(len(assignments)),
         "n_images": int(assignments["image_id"].nunique()),

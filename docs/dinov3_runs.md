@@ -9,7 +9,8 @@
 | Input CSV | `data/sampled_with_thumbnails.csv` |
 | Valid thumbnails (CSV, ≥ 4 KB) | 10,957 |
 | Embeddable (inference OK) | 8,666 |
-| Branch | `feature/dinov3-vitl-cls` |
+| Branch (CLS) | `feature/dinov3-vitl-cls` (merged) |
+| Branch (patch) | `feature/dinov3-patch-vitl` |
 
 ### Production CLS embeddings (complete)
 
@@ -93,7 +94,49 @@ python src/dinov3/cluster_embeddings.py \
 
 Review: `data/dinov3_clusters/<run_id>/umap.png` and `samples/cluster_*/_grid.jpg`.
 
-Patch motifs (`extract_patch_embeddings.py` / `cluster_patch_motifs.py`) deferred until CLS runs are reviewed.
+### Patch embeddings (ViT-L, next)
+
+Patch tokens are local 16×16 visual units inside each 224px thumbnail (~150 patches/image, 1024-dim each). Use the same image corpus as CLS embeddings `20260713T131720Z` (8,666 images).
+
+**Branch:** `feature/dinov3-patch-vitl`
+
+```bash
+# Smoke test (20 images)
+python src/dinov3/extract_patch_embeddings.py \
+  --embeddings-run-id 20260713T131720Z \
+  --limit 20
+
+# Full corpus (~5–10 min on GPU; same ~0.035 s/image as CLS)
+python src/dinov3/extract_patch_embeddings.py \
+  --embeddings-run-id 20260713T131720Z
+
+# Validate
+python src/dinov3/check_patch_embeddings.py --run-id <patch_run_id>
+
+# Resume into an existing run
+python src/dinov3/extract_patch_embeddings.py \
+  --embeddings-run-id 20260713T131720Z \
+  --run-id <patch_run_id>
+```
+
+Outputs: `data/dinov3_patch_embeddings/<run_id>/vectors/<image_id>.npz`  
+Manifest stores `thumb_dir` + `embeddings_run_id` (not per-image path dict) and `model_timing`.
+
+### Cluster patch motifs
+
+HDBSCAN on all patches (~1.3M vectors for full corpus). Default: `eom`, min_cluster_size=30, min_samples=3 (pilot ViT-B had ~72% patch noise).
+
+```bash
+python src/dinov3/cluster_patch_motifs.py --patch-run-id <patch_run_id>
+
+# Tighter micro-motifs (more clusters, more noise)
+python src/dinov3/cluster_patch_motifs.py \
+  --patch-run-id <patch_run_id> \
+  --hdbscan-selection-method leaf \
+  --hdbscan-min-cluster-size 30
+```
+
+Review: `data/dinov3_patch_motifs/<run_id>/thumbnail_samples/motif_*/_grid.jpg`, then `motif_image_links.csv` and `patch_crops/`.
 
 ## Archived pilot (ViT-B/16, 1,743 images)
 
