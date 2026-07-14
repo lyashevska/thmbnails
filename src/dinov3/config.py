@@ -28,6 +28,7 @@ ARCHIVE_ROOT = Path("data/archive")
 # CLS thumbnail clustering (one label per image) — compare against patch motifs below
 CLS_CLUSTERING_TYPE = "cls_thumbnail"
 CLUSTERS_ROOT = Path("data/dinov3_clusters")
+DEFAULT_KMEANS_CLUSTERS = 40
 
 # Patch motif clustering (recurring local visual units across the corpus)
 PATCH_CLUSTERING_TYPE = "patch_motif"

@@ -29,6 +29,7 @@ from typing import Any, Dict
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.dinov3.cluster import (  # noqa: E402
+    CLUSTER_METHODS,
     build_assignments_frame,
     build_metadata_frame,
     cluster_summary,
@@ -46,6 +47,7 @@ from src.dinov3.config import (  # noqa: E402
     PATCH_MOTIFS_ROOT,
     DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     DEFAULT_HDBSCAN_MIN_SAMPLES,
+    DEFAULT_KMEANS_CLUSTERS,
     DEFAULT_PCA_COMPONENTS,
     DEFAULT_SAMPLES_PER_CLUSTER,
     DEFAULT_UMAP_MIN_DIST,
@@ -60,11 +62,29 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out-dir", type=Path, default=CLUSTERS_ROOT)
     p.add_argument("--csv", type=Path, default=CSV_DEFAULT)
     p.add_argument("--thumb-dir", type=Path, default=THUMB_DIR_DEFAULT)
+    p.add_argument(
+        "--method",
+        choices=CLUSTER_METHODS,
+        default="hdbscan",
+        help="Clustering algorithm (HDBSCAN on PCA space, or fixed-K k-means / agglomerative).",
+    )
     p.add_argument("--pca-components", type=int, default=DEFAULT_PCA_COMPONENTS)
     p.add_argument("--umap-neighbors", type=int, default=DEFAULT_UMAP_NEIGHBORS)
     p.add_argument("--umap-min-dist", type=float, default=DEFAULT_UMAP_MIN_DIST)
     p.add_argument("--hdbscan-min-cluster-size", type=int, default=DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE)
     p.add_argument("--hdbscan-min-samples", type=int, default=DEFAULT_HDBSCAN_MIN_SAMPLES)
+    p.add_argument(
+        "--hdbscan-selection-method",
+        choices=("leaf", "eom"),
+        default="leaf",
+        help="HDBSCAN cluster_selection_method (leaf = more micro-clusters, eom = fewer).",
+    )
+    p.add_argument(
+        "--n-clusters",
+        type=int,
+        default=DEFAULT_KMEANS_CLUSTERS,
+        help="K for kmeans/agglomerative (ignored for hdbscan).",
+    )
     p.add_argument("--samples-per-cluster", type=int, default=DEFAULT_SAMPLES_PER_CLUSTER)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--run-id", default=None, help="Output cluster run id (default: timestamp).")
@@ -80,14 +100,17 @@ def main() -> None:
     print(f"  embeddings_run={emb_run_dir.name}")
     print(f"  shape={embeddings.shape}  model={emb_manifest.get('model_id', 'unknown')}")
 
-    print("\nStep 2: PCA → UMAP → HDBSCAN")
+    print(f"\nStep 2: PCA → UMAP → {args.method.upper()}")
     result = run_cluster_pipeline(
         embeddings,
+        method=args.method,
         pca_components=args.pca_components,
         umap_neighbors=args.umap_neighbors,
         umap_min_dist=args.umap_min_dist,
         hdbscan_min_cluster_size=args.hdbscan_min_cluster_size,
         hdbscan_min_samples=args.hdbscan_min_samples,
+        hdbscan_selection_method=args.hdbscan_selection_method,
+        n_clusters=args.n_clusters,
         seed=args.seed,
     )
     n_clusters = len(set(result.labels)) - (1 if -1 in result.labels else 0)
@@ -138,12 +161,15 @@ def main() -> None:
         "embeddings_run_id": emb_run_dir.name,
         "embeddings_model": emb_manifest.get("model_id"),
         "embedding_shape": list(embeddings.shape),
+        "method": args.method,
         "pca_components": result.pca_components,
         "explained_variance_ratio": result.explained_variance_ratio,
         "umap_neighbors": args.umap_neighbors,
         "umap_min_dist": args.umap_min_dist,
         "hdbscan_min_cluster_size": args.hdbscan_min_cluster_size,
         "hdbscan_min_samples": args.hdbscan_min_samples,
+        "hdbscan_selection_method": args.hdbscan_selection_method,
+        "n_clusters_target": args.n_clusters if args.method != "hdbscan" else None,
         "seed": args.seed,
         "n_images": len(image_ids),
         "n_clusters": n_clusters,
