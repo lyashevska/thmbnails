@@ -70,6 +70,19 @@ def load_patch_vector(path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, s
     return data["patches"], data["rows"], data["cols"], image_id
 
 
+def _resolve_thumbnail_path(
+    image_id: str,
+    *,
+    thumb_lookup: Dict[str, str],
+    thumb_dir: Optional[Path],
+) -> str:
+    if image_id in thumb_lookup and thumb_lookup[image_id]:
+        return thumb_lookup[image_id]
+    if thumb_dir is not None:
+        return str(thumb_dir / image_id)
+    return ""
+
+
 def load_patch_corpus(patch_run_dir: Path) -> PatchCorpus:
     vectors_dir = patch_run_dir / "vectors"
     files = sorted(vectors_dir.glob("*.npz"))
@@ -84,9 +97,12 @@ def load_patch_corpus(patch_run_dir: Path) -> PatchCorpus:
 
     manifest_path = patch_run_dir / "manifest.json"
     thumb_lookup: Dict[str, str] = {}
+    thumb_dir: Optional[Path] = THUMB_DIR_DEFAULT
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         thumb_lookup = manifest.get("thumbnail_paths", {})
+        if manifest.get("thumb_dir"):
+            thumb_dir = Path(manifest["thumb_dir"])
 
     for path in files:
         patches, r, c, image_id = load_patch_vector(path)
@@ -98,7 +114,12 @@ def load_patch_corpus(patch_run_dir: Path) -> PatchCorpus:
         image_ids.extend([image_id] * len(patches))
         rows.append(r)
         cols.append(c)
-        thumb_paths.extend([thumb_lookup.get(image_id, "")] * len(patches))
+        thumb_path = _resolve_thumbnail_path(
+            image_id,
+            thumb_lookup=thumb_lookup,
+            thumb_dir=thumb_dir,
+        )
+        thumb_paths.extend([thumb_path] * len(patches))
 
     return PatchCorpus(
         patches=np.vstack(patch_chunks),
@@ -117,6 +138,7 @@ def run_patch_motif_pipeline(
     umap_min_dist: float = DEFAULT_UMAP_MIN_DIST,
     hdbscan_min_cluster_size: int = DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     hdbscan_min_samples: int = DEFAULT_HDBSCAN_MIN_SAMPLES,
+    hdbscan_selection_method: str = "eom",
     seed: int = 42,
 ):
     return run_cluster_pipeline(
@@ -126,6 +148,7 @@ def run_patch_motif_pipeline(
         umap_min_dist=umap_min_dist,
         hdbscan_min_cluster_size=hdbscan_min_cluster_size,
         hdbscan_min_samples=hdbscan_min_samples,
+        hdbscan_selection_method=hdbscan_selection_method,
         seed=seed,
     )
 
