@@ -6,7 +6,7 @@ from pathlib import Path
 VITB16_MODEL_ID = "facebook/dinov3-vitb16-pretrain-lvd1689m"
 VITL16_MODEL_ID = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 
-# Production default for full-corpus CLS runs on this branch.
+# Production default for full-corpus CLS runs.
 DEFAULT_MODEL_ID = VITL16_MODEL_ID
 
 # Laptop / smoke-test fallback (86M params, 768-dim CLS).
@@ -21,20 +21,21 @@ DEFAULT_CLS_SIZE = 224
 
 CSV_DEFAULT = Path("data/sampled_with_thumbnails.csv")
 THUMB_DIR_DEFAULT = Path("data/thumbnails")
-EMBEDDINGS_ROOT = Path("data/dinov3_embeddings")
-PATCH_EMBEDDINGS_ROOT = Path("data/dinov3_patch_embeddings")
 ARCHIVE_ROOT = Path("data/archive")
 
-# CLS thumbnail clustering (one label per image) — compare against patch motifs below
-CLS_CLUSTERING_TYPE = "cls_thumbnail"
-CLUSTERS_ROOT = Path("data/dinov3_clusters")
-DEFAULT_KMEANS_CLUSTERS = 40
+# CLS track: one embedding / one cluster label per thumbnail
+CLS_EMBEDDINGS_ROOT = Path("data/dinov3_cls_embeddings")
+CLS_CLUSTERS_ROOT = Path("data/dinov3_cls_clusters")
+CLS_CLUSTERING_TYPE = "cls"
 
-# Patch motif clustering (recurring local visual units across the corpus)
-PATCH_CLUSTERING_TYPE = "patch_motif"
-PATCH_MOTIFS_ROOT = Path("data/dinov3_patch_motifs")
+# Patch track: one embedding / one cluster label per 16×16 token
+PATCH_EMBEDDINGS_ROOT = Path("data/dinov3_patch_embeddings")
+PATCH_CLUSTERS_ROOT = Path("data/dinov3_patch_clusters")
+PATCH_CLUSTERING_TYPE = "patch"
+
 DEFAULT_PATCH_SIZE = 224  # letterboxed image input size
 DEFAULT_VIT_PATCH_SIZE = 16  # ViT */16 spatial patch size for crops/montages
+DEFAULT_KMEANS_CLUSTERS = 40
 
 # Shared clustering defaults (full ~8.6k corpus; tune via CLI)
 DEFAULT_PCA_COMPONENTS = 50

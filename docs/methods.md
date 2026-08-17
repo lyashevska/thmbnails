@@ -92,11 +92,11 @@ The project also includes a DINOv3-based embedding pipeline for thumbnail-level 
 - Input: local thumbnail JPGs from `data/thumbnails/` or thumbnail paths recorded in the CSV.
 - Filtering: the pipeline keeps only valid thumbnails, using the same minimum file-size check as the VLM workflow and requiring 640×360 source thumbnails.
 - Preprocessing: thumbnails are converted to RGB, letterboxed to a square canvas, and resized to the model input size before inference.
-- Extraction: `src/dinov3/extract_embeddings.py` loads a Hugging Face DINOv3 checkpoint and writes one CLS embedding per image.
-- Validation: `src/dinov3/check_embeddings.py` verifies that the stacked embedding matrix, image-id list, and model metadata are consistent.
+- Extraction: `src/dinov3/extract_cls.py` loads a Hugging Face DINOv3 checkpoint and writes one CLS embedding per image.
+- Validation: `src/dinov3/check_cls.py` verifies that the stacked embedding matrix, image-id list, and model metadata are consistent.
 
 ### Outputs
-Embeddings are written under `data/dinov3_embeddings/<run_id>/` and include:
+Embeddings are written under `data/dinov3_cls_embeddings/<run_id>/` and include:
 - `vectors/<image_id>.npy` for resume-friendly per-image checkpoints
 - `cls_embeddings.npy` for the stacked embedding matrix
 - `image_ids.json` for row order

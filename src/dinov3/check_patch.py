@@ -3,8 +3,8 @@
 Sanity-check a DINOv3 patch embedding run.
 
 Examples:
-    python src/dinov3/check_patch_embeddings.py --run-id 20260714T120000Z
-    python src/dinov3/check_patch_embeddings.py --run-dir data/dinov3_patch_embeddings/<run_id>
+    python src/dinov3/check_patch.py --run-id 20260714T101958Z
+    python src/dinov3/check_patch.py --run-dir data/dinov3_patch_embeddings/<run_id>
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.dinov3.config import PATCH_EMBEDDINGS_ROOT, expected_cls_dim  # noqa: E402
-from src.dinov3.patch_motifs import load_patch_vector  # noqa: E402
+from src.dinov3.extract import load_patch_vector  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

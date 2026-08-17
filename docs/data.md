@@ -29,11 +29,13 @@ Per-year valid counts: 2020 → 1,639; 2021 → 1,655; 2022 → 1,660; 2023 → 
 
 ## DINOv3 outputs
 
-DINOv3 feature extraction writes run-specific outputs to `data/dinov3_embeddings/<run_id>/`:
+Two tracks, each with embeddings then clusters. See [dinov3_runs.md](dinov3_runs.md) for active run IDs.
 
-- `vectors/<image_id>.npy` - per-image CLS embeddings used for resume-friendly checkpointing
-- `cls_embeddings.npy` - stacked matrix of embeddings for the full run
-- `image_ids.json` - image order corresponding to the stacked matrix
-- `manifest.json` - run metadata, model ID, and shape information
+| Path | Contents |
+|------|----------|
+| `data/dinov3_cls_embeddings/<run_id>/` | CLS vectors: `vectors/<image_id>.npy`, `cls_embeddings.npy`, `image_ids.json`, `manifest.json` |
+| `data/dinov3_cls_clusters/<run_id>/` | One label per thumbnail: `cluster_assignments.csv`, `cluster_summary.csv`, `umap.png`, `samples/` |
+| `data/dinov3_patch_embeddings/<run_id>/` | Patch vectors: `vectors/<image_id>.npz`, `image_ids.json`, `manifest.json` |
+| `data/dinov3_patch_clusters/<run_id>/` | One label per patch: `patch_assignments.csv`, `cluster_summary.csv`, `image_cluster_histogram.csv`, `patch_crops/` |
 
 The preprocessing and validation scripts use the same valid-thumbnail criteria as the analysis pipeline: readable image, at least 4 KB in file size, and 640×360 source dimensions.

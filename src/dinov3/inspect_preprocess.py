@@ -8,9 +8,9 @@ Saves previews under data/dinov3_previews/<run_id>/:
   - manifest.json           per-image metadata
 
 Examples:
-    python src/inspect_dinov3_preprocess.py
-    python src/inspect_dinov3_preprocess.py --limit 10 --seed 42
-    python src/inspect_dinov3_preprocess.py --include-placeholders
+    python src/dinov3/inspect_preprocess.py
+    python src/dinov3/inspect_preprocess.py --limit 10 --seed 42
+    python src/dinov3/inspect_preprocess.py --include-placeholders
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from typing import Any, Dict, List
 
 from PIL import Image
 
-# Allow running as: python src/inspect_dinov3_preprocess.py
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Allow running as: python src/dinov3/inspect_preprocess.py
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.dinov3.preprocess import (  # noqa: E402
     DEFAULT_MIN_BYTES,
