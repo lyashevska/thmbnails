@@ -72,7 +72,7 @@ The DINOv3 preprocessing pipeline handles image validation and normalization:
 1. **Filter invalid / placeholder files** – Checks file size (minimum 4 KB by default) and dimensions (640×360 for thumbnails)
 2. **Convert to RGB** – Handles various image formats
 3. **Letterbox to square** – Preserves 16:9 composition without distortion; fills padding with black (0, 0, 0)
-4. **Resize to model input** – 224px for CLS token, 518px for patch token extraction
+4. **Resize to model input** – 224px for both CLS and patch extraction
 
 **Valid thumbnail criteria** (from [src/dinov3/preprocess.py](src/dinov3/preprocess.py)):
 - File exists and is readable
@@ -83,7 +83,7 @@ Outputs: PIL Image objects ready for DINOv3 model inference.
 
 ### Model Selection & Hardware
 
-**Default on `feature/dinov3-vitl-cls`:** ViT-L/16 (`facebook/dinov3-vitl16-pretrain-lvd1689m`, 300M params, 1024-dim CLS).
+**Default:** ViT-L/16 (`facebook/dinov3-vitl16-pretrain-lvd1689m`, 300M params, 1024-dim CLS).
 
 | Model | Parameters | CLS dim | VRAM | Use Case |
 |-------|-----------|---------|------|----------|

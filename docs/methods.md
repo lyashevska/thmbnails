@@ -70,8 +70,6 @@ Primary current script: `src/vlm_annotate.py`
 
 CLI supports pilot and resumable runs via `--limit`, `--force`, `--dry-run`, and configurable input/output paths (`--csv`, `--out-dir`, `--results`, `--prompt`, `--model`). Existing per-image JSON files are skipped unless `--force` is set.
 
-Optional advanced path: `src/analyze_thumbnails.py` (Transformers/Hugging Face backend) remains available for stricter or larger-scale runs.
-
 ### Quality control & limitations
 - The model is prompted to ground claims in visible pixels + title.
 - Current script intentionally uses minimal postprocessing; some outputs may deviate from the target schema and should be spot-checked.
