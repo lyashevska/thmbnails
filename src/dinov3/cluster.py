@@ -1,5 +1,7 @@
 """
-PCA → UMAP → HDBSCAN clustering for DINOv3 CLS embeddings.
+DINOv3 clustering library (CLS thumbnails and patch tokens).
+
+CLIs: cluster_cls.py, cluster_patch.py.
 """
 
 from __future__ import annotations
@@ -16,15 +18,16 @@ import pandas as pd
 from PIL import Image
 
 from .config import (
-    CLUSTERS_ROOT,
+    CLS_EMBEDDINGS_ROOT,
     CSV_DEFAULT,
     DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     DEFAULT_HDBSCAN_MIN_SAMPLES,
     DEFAULT_PCA_COMPONENTS,
+    DEFAULT_PATCH_SIZE,
     DEFAULT_SAMPLES_PER_CLUSTER,
     DEFAULT_UMAP_MIN_DIST,
     DEFAULT_UMAP_NEIGHBORS,
-    EMBEDDINGS_ROOT,
+    DEFAULT_VIT_PATCH_SIZE,
     THUMB_DIR_DEFAULT,
 )
 
@@ -64,7 +67,7 @@ def _require_cluster_deps() -> None:
 def resolve_embeddings_run(
     *,
     run_id: Optional[str] = None,
-    embeddings_root: Path = EMBEDDINGS_ROOT,
+    embeddings_root: Path = CLS_EMBEDDINGS_ROOT,
 ) -> Path:
     if run_id:
         run_dir = embeddings_root / run_id
@@ -253,7 +256,9 @@ def save_umap_plot(
     assignments: pd.DataFrame,
     out_path: Path,
     *,
-    title: str = "DINOv3 thumbnail clusters (UMAP)",
+    title: str = "DINOv3 clusters (UMAP)",
+    point_size: int = 18,
+    max_legend: int = 20,
 ) -> None:
     _require_cluster_deps()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -261,6 +266,7 @@ def save_umap_plot(
     fig, ax = plt.subplots(figsize=(10, 8))
     clusters = sorted(assignments["cluster_id"].unique())
     cmap = plt.get_cmap("tab20", max(len(clusters), 1))
+    show_legend = len(clusters) <= max_legend
 
     for idx, cluster_id in enumerate(clusters):
         subset = assignments[assignments["cluster_id"] == cluster_id]
@@ -269,9 +275,9 @@ def save_umap_plot(
         ax.scatter(
             subset["umap_x"],
             subset["umap_y"],
-            s=14 if cluster_id == -1 else 18,
+            s=point_size - 4 if cluster_id == -1 else point_size,
             alpha=0.55 if cluster_id == -1 else 0.8,
-            label=f"{label} (n={len(subset)})",
+            label=f"{label} (n={len(subset)})" if show_legend else None,
             c=[color],
             edgecolors="none",
         )
@@ -279,7 +285,8 @@ def save_umap_plot(
     ax.set_title(title)
     ax.set_xlabel("UMAP-1")
     ax.set_ylabel("UMAP-2")
-    ax.legend(loc="best", fontsize=8, markerscale=1.5)
+    if show_legend:
+        ax.legend(loc="best", fontsize=8, markerscale=1.5)
     fig.tight_layout()
     fig.savefig(out_path, dpi=160)
     plt.close(fig)
@@ -363,3 +370,148 @@ def save_cluster_sample_grids(
 
 def run_id_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+@dataclass
+class PatchCorpus:
+    patches: np.ndarray
+    image_ids: np.ndarray
+    rows: np.ndarray
+    cols: np.ndarray
+    thumbnail_paths: np.ndarray
+
+
+def load_patch_corpus(patch_run_dir: Path) -> PatchCorpus:
+    from .extract import load_patch_vector
+
+    vectors_dir = patch_run_dir / "vectors"
+    files = sorted(vectors_dir.glob("*.npz"))
+    if not files:
+        raise FileNotFoundError(f"No patch vectors in {vectors_dir}")
+
+    patch_chunks: List[np.ndarray] = []
+    image_ids: List[str] = []
+    rows: List[np.ndarray] = []
+    cols: List[np.ndarray] = []
+    thumb_paths: List[str] = []
+
+    manifest_path = patch_run_dir / "manifest.json"
+    thumb_lookup: Dict[str, str] = {}
+    thumb_dir: Optional[Path] = THUMB_DIR_DEFAULT
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        thumb_lookup = manifest.get("thumbnail_paths", {})
+        if manifest.get("thumb_dir"):
+            thumb_dir = Path(manifest["thumb_dir"])
+
+    for path in files:
+        patches, r, c, image_id = load_patch_vector(path)
+        if not image_id.endswith(".jpg") and path.name.endswith(".npz"):
+            image_id = path.name[:-4]
+        patch_chunks.append(patches)
+        image_ids.extend([image_id] * len(patches))
+        rows.append(r)
+        cols.append(c)
+        if image_id in thumb_lookup and thumb_lookup[image_id]:
+            thumb_path = thumb_lookup[image_id]
+        elif thumb_dir is not None:
+            thumb_path = str(thumb_dir / image_id)
+        else:
+            thumb_path = ""
+        thumb_paths.extend([thumb_path] * len(patches))
+
+    return PatchCorpus(
+        patches=np.vstack(patch_chunks),
+        image_ids=np.array(image_ids),
+        rows=np.concatenate(rows),
+        cols=np.concatenate(cols),
+        thumbnail_paths=np.array(thumb_paths),
+    )
+
+
+def build_patch_assignments(corpus: PatchCorpus, result: ClusterPipelineResult) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "image_id": corpus.image_ids,
+            "patch_row": corpus.rows,
+            "patch_col": corpus.cols,
+            "cluster_id": result.labels,
+            "cluster_probability": result.probabilities,
+            "umap_x": result.umap_2d[:, 0],
+            "umap_y": result.umap_2d[:, 1],
+            "thumbnail_path": corpus.thumbnail_paths,
+        }
+    )
+
+
+def build_image_cluster_histogram(assignments: pd.DataFrame) -> pd.DataFrame:
+    grouped = (
+        assignments.groupby(["image_id", "cluster_id"])
+        .size()
+        .reset_index(name="patch_count")
+    )
+    totals = grouped.groupby("image_id")["patch_count"].transform("sum")
+    grouped["patch_fraction"] = (grouped["patch_count"] / totals).round(4)
+    return grouped.sort_values(["image_id", "patch_fraction"], ascending=[True, False])
+
+
+def save_patch_cluster_montages(
+    assignments: pd.DataFrame,
+    out_dir: Path,
+    *,
+    thumb_dir: Path = THUMB_DIR_DEFAULT,
+    samples_per_cluster: int = DEFAULT_SAMPLES_PER_CLUSTER,
+    vit_patch_size: int = DEFAULT_VIT_PATCH_SIZE,
+    cols: int = 6,
+    upscale: int = 8,
+) -> Dict[str, Any]:
+    from .preprocess import preprocess_for_dinov3
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    saved: Dict[str, Any] = {}
+    preprocessed_cache: Dict[str, Image.Image] = {}
+
+    for cluster_id in sorted(assignments["cluster_id"].unique()):
+        label = "noise" if cluster_id == -1 else str(int(cluster_id))
+        cluster_dir = out_dir / f"cluster_{label}"
+        cluster_dir.mkdir(parents=True, exist_ok=True)
+
+        subset = assignments[assignments["cluster_id"] == cluster_id]
+        ordered = subset.sort_values("cluster_probability", ascending=False).head(samples_per_cluster)
+
+        panels: List[Image.Image] = []
+        copied = 0
+        for _, row in ordered.iterrows():
+            image_id = row["image_id"]
+            thumb = _resolve_thumb_path(image_id, str(row.get("thumbnail_path", "")), thumb_dir)
+            if thumb is None:
+                continue
+
+            if image_id not in preprocessed_cache:
+                pre = preprocess_for_dinov3(thumb, target_size=DEFAULT_PATCH_SIZE)
+                preprocessed_cache[image_id] = pre.image
+
+            image = preprocessed_cache[image_id]
+            ps = vit_patch_size
+            r = int(row["patch_row"])
+            c = int(row["patch_col"])
+            crop = image.crop((c * ps, r * ps, (c + 1) * ps, (r + 1) * ps))
+            crop = crop.resize((ps * upscale, ps * upscale), Image.NEAREST)
+            out_name = f"{image_id.rsplit('.', 1)[0]}_r{r}_c{c}.jpg"
+            crop.save(cluster_dir / out_name, quality=90)
+            panels.append(crop)
+            copied += 1
+
+        if panels:
+            rows_n = (len(panels) + cols - 1) // cols
+            tile = ps * upscale
+            grid = Image.new("RGB", (cols * tile, rows_n * tile), (0, 0, 0))
+            for i, panel in enumerate(panels):
+                x = (i % cols) * tile
+                y = (i // cols) * tile
+                grid.paste(panel, (x, y))
+            grid.save(cluster_dir / "_grid.jpg", quality=90)
+
+        saved[label] = {"patch_count": int(len(subset)), "samples_saved": copied}
+
+    return saved

@@ -3,8 +3,8 @@
 Sanity-check a DINOv3 embedding run.
 
 Examples:
-    python src/dinov3/check_embeddings.py --run-id 20260616T150000Z
-    python src/dinov3/check_embeddings.py --run-dir data/dinov3_embeddings/<run_id>
+    python src/dinov3/check_cls.py --run-id 20260713T131720Z
+    python src/dinov3/check_cls.py --run-dir data/dinov3_cls_embeddings/<run_id>
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.dinov3.config import EMBEDDINGS_ROOT, expected_cls_dim  # noqa: E402
+from src.dinov3.config import CLS_EMBEDDINGS_ROOT, expected_cls_dim  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,7 +44,7 @@ def main() -> None:
     if args.run_dir:
         run_dir = args.run_dir
     elif args.run_id:
-        run_dir = EMBEDDINGS_ROOT / args.run_id
+        run_dir = CLS_EMBEDDINGS_ROOT / args.run_id
     else:
         print("Provide --run-id or --run-dir")
         sys.exit(1)

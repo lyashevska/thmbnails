@@ -55,11 +55,11 @@ This current workflow is optimized for fast pilot iteration and traceability.
 
 ## DINOv3 Embedding Checks
 
-Embedding validation is performed with `src/dinov3/check_embeddings.py` after a run finishes. A healthy run should report:
+Embedding validation is performed with `src/dinov3/check_cls.py` after a run finishes. A healthy run should report:
 
 - matching counts for the embedding matrix and `image_ids.json`
 - finite vector norms with no NaN or Inf values
-- a CLS embedding shape of `(N, 768)` for the ViT-B/16 checkpoint used in the current pipeline
+- a CLS embedding shape of `(N, 1024)` for the ViT-L/16 checkpoint used in the current pipeline (768 for a ViT-B/16 smoke test)
 - random cosine similarities that are finite and generally higher for visually closer thumbnails
 
 This check is intended as a sanity test, not a formal quality benchmark. With only a few samples, the cosine similarities mainly confirm that the pipeline is producing plausible feature vectors.

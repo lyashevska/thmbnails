@@ -1,20 +1,21 @@
 """
-DINOv3 CLS embedding extraction for preprocessed thumbnails.
+DINOv3 extraction library (CLS and patch tokens).
+
+CLIs: extract_cls.py, extract_patch.py.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
-
-from .config import DEFAULT_PATCH_SIZE
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 from PIL import Image
 
-from .config import DEFAULT_CLS_SIZE, DEFAULT_MODEL_ID
-from .preprocess import PreprocessResult, preprocess_for_dinov3
+from .config import DEFAULT_CLS_SIZE, DEFAULT_MODEL_ID, DEFAULT_PATCH_SIZE
+from .preprocess import PreprocessResult, is_valid_thumbnail, preprocess_for_dinov3
 
 try:
     import torch
@@ -210,3 +211,49 @@ def extract_patches_from_path(
         min_bytes=min_bytes,
     )
     return extract_patches_from_preprocessed(bundle, preprocessed)
+
+
+def save_patch_vector(path: Path, result: PatchExtractResult, image_id: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(
+        path,
+        patches=result.patches,
+        rows=result.rows,
+        cols=result.cols,
+        grid_shape=np.array(result.grid_shape, dtype=np.int32),
+        patch_size=np.int32(result.patch_size),
+        image_id=np.array(image_id),
+    )
+
+
+def load_patch_vector(path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    data = np.load(path)
+    image_id = str(data["image_id"].item()) if data["image_id"].shape == () else str(data["image_id"][0])
+    return data["patches"], data["rows"], data["cols"], image_id
+
+
+def load_thumbnail_rows(csv_path: Path, thumb_dir: Path, *, min_bytes: int) -> List[Dict[str, str]]:
+    """Valid thumbnails from the sample CSV, with resolved local paths."""
+    df = pd.read_csv(csv_path)
+    rows: List[Dict[str, str]] = []
+
+    for _, row in df.iterrows():
+        tpath = row.get("thumbnail_path")
+        if pd.isna(tpath):
+            continue
+
+        p = Path(str(tpath))
+        if not p.is_absolute():
+            p = Path.cwd() / p
+
+        ok, _ = is_valid_thumbnail(p, min_bytes=min_bytes)
+        if not ok:
+            alt = thumb_dir / p.name
+            ok_alt, _ = is_valid_thumbnail(alt, min_bytes=min_bytes)
+            if not ok_alt:
+                continue
+            p = alt
+
+        rows.append({"image_id": p.name, "thumbnail_path": str(p)})
+
+    return rows

@@ -1,4 +1,8 @@
-"""DINOv3 preprocessing utilities for thumbnail feature extraction."""
+"""DINOv3 thumbnail embeddings and clustering.
+
+Libraries: extract.py, cluster.py, preprocess.py, config.py, timing.py.
+CLIs: extract_cls / extract_patch / cluster_cls / cluster_patch / check_cls / check_patch.
+"""
 
 from .preprocess import (
     PreprocessResult,

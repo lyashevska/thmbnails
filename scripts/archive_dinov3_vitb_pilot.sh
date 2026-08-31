@@ -32,12 +32,12 @@ Contents:
   embeddings/       CLS run 20260617T091002Z
   clusters/         CLS cluster 20260617T123852Z
   patch_embeddings/ Patch run 20260618T125222Z
-  patch_motifs/     Patch motifs 20260618T140719Z
+  patch_clusters/   Patch clusters 20260618T140719Z
 EOF
 
-move_if_exists "$ROOT/data/dinov3_embeddings/20260617T091002Z" "$ARCHIVE/embeddings"
-move_if_exists "$ROOT/data/dinov3_clusters/20260617T123852Z" "$ARCHIVE/clusters"
+move_if_exists "$ROOT/data/dinov3_cls_embeddings/20260617T091002Z" "$ARCHIVE/embeddings"
+move_if_exists "$ROOT/data/dinov3_cls_clusters/20260617T123852Z" "$ARCHIVE/clusters"
 move_if_exists "$ROOT/data/dinov3_patch_embeddings/20260618T125222Z" "$ARCHIVE/patch_embeddings"
-move_if_exists "$ROOT/data/dinov3_patch_motifs/20260618T140719Z" "$ARCHIVE/patch_motifs"
+move_if_exists "$ROOT/data/dinov3_patch_clusters/20260618T140719Z" "$ARCHIVE/patch_clusters"
 
 echo "Done. Active data/dinov3_* dirs are ready for new ViT-L runs."

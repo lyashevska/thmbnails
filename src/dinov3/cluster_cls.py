@@ -2,10 +2,10 @@
 """
 CLS thumbnail clustering with PCA → UMAP → HDBSCAN (one label per image).
 
-For recurring local visual units (patch motifs), use cluster_patch_motifs.py instead.
-Outputs here are labeled clustering_type=cls_thumbnail for comparison.
+For patch-token clusters, use cluster_patch.py instead.
+Outputs here are labeled clustering_type=cls.
 
-Reads a completed embedding run from data/dinov3_embeddings/<run_id>/ and writes:
+Reads a completed embedding run from data/dinov3_cls_embeddings/<run_id>/ and writes:
   cluster_assignments.csv
   cluster_summary.csv
   umap.png
@@ -13,9 +13,9 @@ Reads a completed embedding run from data/dinov3_embeddings/<run_id>/ and writes
   manifest.json
 
 Examples:
-    python src/dinov3/cluster_embeddings.py --embeddings-run-id 20260617T091002Z
-    python src/dinov3/cluster_embeddings.py
-    python src/dinov3/cluster_embeddings.py --hdbscan-min-cluster-size 20
+    python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z
+    python src/dinov3/cluster_cls.py
+    python src/dinov3/cluster_cls.py --hdbscan-min-cluster-size 20
 """
 
 from __future__ import annotations
@@ -42,9 +42,10 @@ from src.dinov3.cluster import (  # noqa: E402
 )
 from src.dinov3.config import (  # noqa: E402
     CLS_CLUSTERING_TYPE,
-    CLUSTERS_ROOT,
+    CLS_CLUSTERS_ROOT,
     CSV_DEFAULT,
-    PATCH_MOTIFS_ROOT,
+    PATCH_CLUSTERING_TYPE,
+    PATCH_CLUSTERS_ROOT,
     DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
     DEFAULT_HDBSCAN_MIN_SAMPLES,
     DEFAULT_KMEANS_CLUSTERS,
@@ -59,7 +60,7 @@ from src.dinov3.config import (  # noqa: E402
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Cluster DINOv3 CLS embeddings.")
     p.add_argument("--embeddings-run-id", default=None, help="Embedding run folder name.")
-    p.add_argument("--out-dir", type=Path, default=CLUSTERS_ROOT)
+    p.add_argument("--out-dir", type=Path, default=CLS_CLUSTERS_ROOT)
     p.add_argument("--csv", type=Path, default=CSV_DEFAULT)
     p.add_argument("--thumb-dir", type=Path, default=THUMB_DIR_DEFAULT)
     p.add_argument(
@@ -154,9 +155,9 @@ def main() -> None:
         "run_id": run_id,
         "clustering_type": CLS_CLUSTERING_TYPE,
         "comparison": {
-            "patch_clustering_type": "patch_motif",
-            "patch_motifs_dir": str(PATCH_MOTIFS_ROOT),
-            "note": "CLS clusters group whole thumbnails; patch motifs group local visual units.",
+            "patch_clustering_type": PATCH_CLUSTERING_TYPE,
+            "patch_clusters_dir": str(PATCH_CLUSTERS_ROOT),
+            "note": "CLS clusters group whole thumbnails; patch clusters group local visual units.",
         },
         "embeddings_run_id": emb_run_dir.name,
         "embeddings_model": emb_manifest.get("model_id"),

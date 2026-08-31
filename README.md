@@ -72,7 +72,7 @@ The DINOv3 preprocessing pipeline handles image validation and normalization:
 1. **Filter invalid / placeholder files** – Checks file size (minimum 4 KB by default) and dimensions (640×360 for thumbnails)
 2. **Convert to RGB** – Handles various image formats
 3. **Letterbox to square** – Preserves 16:9 composition without distortion; fills padding with black (0, 0, 0)
-4. **Resize to model input** – 224px for CLS token, 518px for patch token extraction
+4. **Resize to model input** – 224px for both CLS and patch extraction
 
 **Valid thumbnail criteria** (from [src/dinov3/preprocess.py](src/dinov3/preprocess.py)):
 - File exists and is readable
@@ -83,7 +83,7 @@ Outputs: PIL Image objects ready for DINOv3 model inference.
 
 ### Model Selection & Hardware
 
-**Default on `feature/dinov3-vitl-cls`:** ViT-L/16 (`facebook/dinov3-vitl16-pretrain-lvd1689m`, 300M params, 1024-dim CLS).
+**Default:** ViT-L/16 (`facebook/dinov3-vitl16-pretrain-lvd1689m`, 300M params, 1024-dim CLS).
 
 | Model | Parameters | CLS dim | VRAM | Use Case |
 |-------|-----------|---------|------|----------|
@@ -108,26 +108,26 @@ huggingface-cli login
 Preview letterbox preprocessing:
 
 ```bash
-python src/inspect_dinov3_preprocess.py --limit 10 --seed 42
+python src/dinov3/inspect_preprocess.py --limit 10 --seed 42
 ```
 
 Extract CLS embeddings for valid thumbnails (currently **~8,666** images ≥ 4 KB in `data/sampled_with_thumbnails.csv`). The script is resumable and skips any already written `vectors/<image_id>.npy` files unless you pass `--force`:
 
 ```bash
 # Dry run: show what would be processed
-python src/dinov3/extract_embeddings.py --dry-run --limit 10
+python src/dinov3/extract_cls.py --dry-run --limit 10
 
 # Small real run (ViT-L default)
-python src/dinov3/extract_embeddings.py --limit 20
+python src/dinov3/extract_cls.py --limit 20
 
 # Full run (~8.6k valid thumbnails; use GPU / HPC)
-python src/dinov3/extract_embeddings.py
+python src/dinov3/extract_cls.py
 
 # Resume into an existing run directory
-python src/dinov3/extract_embeddings.py --run-id <run_id>
+python src/dinov3/extract_cls.py --run-id <run_id>
 
 # Laptop smoke test with ViT-B/16
-python src/dinov3/extract_embeddings.py \
+python src/dinov3/extract_cls.py \
   --model facebook/dinov3-vitb16-pretrain-lvd1689m --limit 10
 ```
 
@@ -142,8 +142,8 @@ See [docs/dinov3_runs.md](docs/dinov3_runs.md) for run IDs and clustering notes.
 Validate the results after extraction. This checks that the matrix and ID list match, that embeddings are finite, and prints vector norms plus random cosine similarities:
 
 ```bash
-python src/dinov3/check_embeddings.py --run-id <run_id>
-python src/dinov3/check_embeddings.py --run-dir data/dinov3_embeddings/<run_id>
+python src/dinov3/check_cls.py --run-id <run_id>
+python src/dinov3/check_cls.py --run-dir data/dinov3_cls_embeddings/<run_id>
 ```
 
 A healthy validation run should print:
@@ -152,55 +152,54 @@ A healthy validation run should print:
 - finite vector norms with no NaN/Inf errors
 - `OK: basic embedding checks passed.`
 
-Outputs under `data/dinov3_embeddings/<run_id>/`:
+Outputs under `data/dinov3_cls_embeddings/<run_id>/`:
 - `vectors/<image_id>.npy` — per-image CLS vectors (resume checkpoints)
 - `cls_embeddings.npy` — stacked matrix `(N, D)`
 - `image_ids.json` — row order
 - `manifest.json` — model and run metadata
 
-### CLS thumbnail clustering (`clustering_type: cls_thumbnail`)
+### CLS clustering (`clustering_type: cls`)
 
-Groups **whole thumbnails** (one label per image). Use this for visual regimes / thumbnail types.
+One label per **thumbnail**. Use this for visual regimes / thumbnail types.
 
 ```bash
-python src/dinov3/cluster_embeddings.py --embeddings-run-id <run_id>
-python src/dinov3/cluster_embeddings.py   # uses latest embedding run
+python src/dinov3/cluster_cls.py --embeddings-run-id <run_id>
+python src/dinov3/cluster_cls.py   # uses latest embedding run
 
 # Starting point for full corpus (tune after inspecting umap.png):
-python src/dinov3/cluster_embeddings.py \
+python src/dinov3/cluster_cls.py \
   --hdbscan-min-cluster-size 3 --hdbscan-min-samples 1 --umap-neighbors 30
 ```
 
-Outputs under `data/dinov3_clusters/<run_id>/`:
+Outputs under `data/dinov3_cls_clusters/<run_id>/`:
 - `cluster_assignments.csv` — `image_id`, `cluster_id`, `year`, `title`, UMAP coords
 - `cluster_summary.csv` — cluster sizes
 - `umap.png` — 2D visualization
 - `samples/cluster_<id>/` — example thumbnails + `_grid.jpg` per cluster
-- `manifest.json` — `clustering_type: cls_thumbnail`
+- `manifest.json` — `clustering_type: cls`
 
-### Patch motif clustering (`clustering_type: patch_motif`)
+### Patch clustering (`clustering_type: patch`)
 
-Discovers **recurring local visual units** (one label per patch). Compare results against CLS clusters above.
+One label per **16×16 token**. Same clustering idea as CLS, on local units instead of whole thumbnails.
 
 **Step A — extract 224px patch embeddings (letterbox padding rows masked):**
 
 ```bash
-python src/dinov3/extract_patch_embeddings.py --embeddings-run-id <cls_run_id> --limit 50
-python src/dinov3/extract_patch_embeddings.py --embeddings-run-id <cls_run_id>
+python src/dinov3/extract_patch.py --embeddings-run-id <cls_run_id> --limit 50
+python src/dinov3/extract_patch.py --embeddings-run-id <cls_run_id>
 ```
 
-**Step B — cluster patches into motifs:**
+**Step B — cluster the patch embeddings:**
 
 ```bash
-python src/dinov3/cluster_patch_motifs.py --patch-run-id <patch_run_id>
+python src/dinov3/cluster_patch.py --patch-run-id <patch_run_id>
 ```
 
-Outputs under `data/dinov3_patch_motifs/<run_id>/`:
-- `patch_assignments.csv` — every patch: `image_id`, `motif_id`, row/col, UMAP coords
-- `motif_summary.csv` — motif sizes
-- `image_motif_histogram.csv` — motif mix per thumbnail
-- `image_dominant_motif.csv` — top motif per image + metadata
+Outputs under `data/dinov3_patch_clusters/<run_id>/`:
+- `patch_assignments.csv` — every patch: `image_id`, `cluster_id`, row/col, UMAP coords
+- `cluster_summary.csv` — cluster sizes
+- `image_cluster_histogram.csv` — cluster mix per thumbnail
 - `patch_umap.png` — patch-level 2D map
-- `motifs/motif_<id>/_grid.jpg` — example patch crops per motif
-- `manifest.json` — `clustering_type: patch_motif` + pointer to CLS clusters
+- `patch_crops/cluster_<id>/_grid.jpg` — example 16×16 crops
+- `manifest.json` — `clustering_type: patch`
 
