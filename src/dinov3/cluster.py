@@ -18,6 +18,7 @@ import pandas as pd
 from PIL import Image
 
 from .config import (
+    CLS_CLUSTERS_ROOT,
     CLS_EMBEDDINGS_ROOT,
     CSV_DEFAULT,
     DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
@@ -109,6 +110,103 @@ def load_embedding_run(run_dir: Path) -> Tuple[np.ndarray, List[str], Dict[str, 
         )
 
     return embeddings, image_ids, manifest
+
+
+def resolve_clusters_run(
+    run_id: str,
+    *,
+    clusters_root: Path = CLS_CLUSTERS_ROOT,
+) -> Path:
+    run_dir = clusters_root / run_id
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"Cluster run not found: {run_dir}")
+    return run_dir
+
+
+def load_cluster_run(run_dir: Path) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    assignments_path = run_dir / "cluster_assignments.csv"
+    if not assignments_path.exists():
+        raise FileNotFoundError(f"Missing cluster_assignments.csv in {run_dir}")
+    assignments = pd.read_csv(assignments_path)
+    if "image_id" not in assignments.columns or "cluster_id" not in assignments.columns:
+        raise ValueError(f"{assignments_path} needs image_id and cluster_id columns")
+    manifest: Dict[str, Any] = {}
+    manifest_path = run_dir / "manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return assignments, manifest
+
+
+def noise_image_ids(assignments: pd.DataFrame) -> List[str]:
+    noise = assignments[assignments["cluster_id"] == -1]
+    return [str(i) for i in noise["image_id"].tolist()]
+
+
+def subset_embeddings(
+    embeddings: np.ndarray,
+    image_ids: List[str],
+    keep_ids: List[str],
+) -> Tuple[np.ndarray, List[str]]:
+    """Keep rows whose image_id is in keep_ids, in corpus order."""
+    index = {image_id: i for i, image_id in enumerate(image_ids)}
+    missing = [k for k in keep_ids if k not in index]
+    if missing:
+        raise KeyError(f"{len(missing)} noise ids not in the embedding run (e.g. {missing[:3]})")
+    keep_set = set(keep_ids)
+    order = [i for i, image_id in enumerate(image_ids) if image_id in keep_set]
+    subset_ids = [image_ids[i] for i in order]
+    return embeddings[order], subset_ids
+
+
+def next_cluster_id_offset(assignments: pd.DataFrame) -> int:
+    assigned = assignments.loc[assignments["cluster_id"] >= 0, "cluster_id"]
+    if assigned.empty:
+        return 0
+    return int(assigned.max()) + 1
+
+
+def combine_peel_assignments(
+    parent: pd.DataFrame,
+    *,
+    parent_run_id: str,
+    peels: List[Tuple[int, str, pd.DataFrame]],
+) -> pd.DataFrame:
+    """Merge peel rounds onto the parent table. Cluster ids are offset so rounds do not collide.
+
+    ``peels`` is a list of (round_number, run_id, assignments_for_that_round_input).
+    UMAP coordinates for peeled points come from that round (not comparable to round 0).
+    """
+    out = parent.copy()
+    if "round" not in out.columns:
+        out["round"] = np.where(out["cluster_id"] >= 0, 0, -1)
+    else:
+        out.loc[out["cluster_id"] < 0, "round"] = -1
+    if "cluster_id_in_round" not in out.columns:
+        out["cluster_id_in_round"] = out["cluster_id"]
+    if "source_run" not in out.columns:
+        out["source_run"] = np.where(out["cluster_id"] >= 0, parent_run_id, "")
+
+    by_id = {str(i): idx for idx, i in enumerate(out["image_id"].astype(str))}
+    for round_n, run_id, peel_df in peels:
+        offset = next_cluster_id_offset(out)
+        for _, row in peel_df.iterrows():
+            image_id = str(row["image_id"])
+            idx = by_id.get(image_id)
+            if idx is None:
+                continue
+            label = int(row["cluster_id"])
+            if label < 0:
+                continue
+            out.iat[idx, out.columns.get_loc("cluster_id")] = offset + label
+            out.iat[idx, out.columns.get_loc("round")] = round_n
+            out.iat[idx, out.columns.get_loc("cluster_id_in_round")] = label
+            out.iat[idx, out.columns.get_loc("source_run")] = run_id
+            if "cluster_probability" in out.columns and "cluster_probability" in peel_df.columns:
+                out.iat[idx, out.columns.get_loc("cluster_probability")] = row["cluster_probability"]
+            if "umap_x" in out.columns and "umap_x" in peel_df.columns:
+                out.iat[idx, out.columns.get_loc("umap_x")] = row["umap_x"]
+                out.iat[idx, out.columns.get_loc("umap_y")] = row["umap_y"]
+    return out
 
 
 CLUSTER_METHODS = ("hdbscan", "kmeans", "agglomerative")
