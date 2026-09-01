@@ -81,7 +81,9 @@ Working labels for visual interpretation. **Not** a seed-proof taxonomy.
 | D (`n_neighbors=50`), 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
 | 5-D UMAP, `n_neighbors=50`, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.32 |
 
-Treat A as an exploratory seed-42 clustering. Review `umap.png` and `samples/cluster_*/_grid.jpg`. Next analysis step: peel A’s 3,348 noise points (not implemented yet).
+Treat A as an exploratory seed-42 clustering. Review `umap.png` and `samples/cluster_*/_grid.jpg`.
+
+Noise peel (refit 10-D UMAP on A’s 3,348 leftovers, same knobs): `python src/dinov3/cluster_cls_peel.py --from-clusters-run-id sweep-A-n15-mcs20-ms20`. Output `sweep-A-n15-mcs20-ms20-r1/` plus `sweep-A-n15-mcs20-ms20-peels/combined_assignments.csv`. See [README-dev.md](../README-dev.md).
 
 #### Companion / older CLS cluster runs
 

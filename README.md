@@ -19,7 +19,7 @@ src/scraper.py           thumbnail download
 src/vlm_annotate.py      VLM annotation
 src/dinov3/              DINOv3 preprocess, extract, check, cluster
   extract.py / cluster.py           libraries
-  extract_cls.py / cluster_cls.py / cluster_cls_sweep.py   thumbnail-level CLI
+  extract_cls.py / cluster_cls.py / cluster_cls_sweep.py / cluster_cls_peel.py   thumbnail-level CLI
   extract_patch.py / cluster_patch.py   patch-level CLI
 data/                    samples, thumbnails, embeddings, clusters
 docs/                    methods, data notes, run log
