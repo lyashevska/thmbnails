@@ -93,6 +93,7 @@ def main() -> None:
     print("\nStep 2: PCA → UMAP → HDBSCAN on patches")
     result = run_cluster_pipeline(
         corpus.patches,
+        cluster_space="pca",
         pca_components=args.pca_components,
         umap_neighbors=args.umap_neighbors,
         umap_min_dist=args.umap_min_dist,

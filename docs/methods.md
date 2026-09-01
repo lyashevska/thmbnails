@@ -102,3 +102,7 @@ Embeddings are written under `data/dinov3_cls_embeddings/<run_id>/` and include:
 
 ### Interpretation
 DINOv3 embeddings are not human-readable labels. They are continuous feature vectors that can be compared with cosine similarity or used as input to downstream clustering. Higher cosine similarity indicates more similar visual content.
+
+### CLS clustering (chosen cut)
+
+Thumbnail-level clusters are obtained by PCA (50 components) then HDBSCAN on a **10-D UMAP** (`n_neighbors=15`, `min_dist=0`, `eom`, `min_cluster_size=20`, `min_samples=20`). A 2-D UMAP is used only for plots. The working run is `sweep-A-n15-mcs20-ms20` (36 clusters, 38.6% noise on seed 42). Knobs were chosen from a 99-cell sweep plus visual grids, not from the composite score (which preferred a 2-cluster split). UMAP-seed ARI is moderate with large spread (0.45 ± 0.37 over 100 seeds); the cut is exploratory. K-means K=40 on PCA remains the deterministic full-corpus partition. Commands and run IDs: [README-dev.md](../README-dev.md), [dinov3_runs.md](dinov3_runs.md).

@@ -51,32 +51,51 @@ python src/dinov3/extract_cls.py \
 
 Each CLS embedding run records `model_timing` in `manifest.json` (load, inference, seconds/image, device).
 
-### Production CLS clusters (complete)
+### Production CLS clusters
 
-Two complementary runs on embeddings `20260713T131720Z`. Shared settings: PCA 50 (59% variance), UMAP neighbors 30.
+Embeddings `20260713T131720Z`. Commands: [README-dev.md](../README-dev.md).
+
+#### Chosen density clustering (UMAP + HDBSCAN): `sweep-A-n15-mcs20-ms20`
+
+Working labels for visual interpretation. **Not** a seed-proof taxonomy.
+
+| Setting | Value |
+|---------|-------|
+| Path | `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20` |
+| Cluster space | 10-D UMAP (PCA 50 → 59% variance; 2-D UMAP is plot-only) |
+| UMAP | `n_neighbors=15`, `min_dist=0.0` |
+| HDBSCAN | `eom`, `min_cluster_size=20`, `min_samples=20` |
+| Seed | 42 |
+| Clusters | 36 |
+| Noise | 38.6% (3,348) |
+| Median cluster size | 65 |
+| DBCV / silhouette | 0.32 / 0.59 |
+
+**Why A.** A 99-cell sweep (`sweeps/20260831T172632Z`) ranked cells with DBCV 50% / silhouette 30% / (1 − noise) 20%. The composite winner was a **2-cluster, 0% noise** split (median size 4,333) and was discarded. Every cell with ≥ 20 clusters had `min_dist=0`. In that band, A had the best composite, tighter cores than B (same UMAP; `mcs=30`, `ms=10` → 32 clusters, 34% noise, median 92), and leftover mass for a later noise peel.
+
+**Stability (UMAP seeds, knobs frozen).** Pairwise ARI/NMI. Raising `n_neighbors` to 50 or dropping UMAP to 5-D did not help.
+
+| Probe | ARI | NMI |
+|-------|-----|-----|
+| A, 100 seeds (`sweep-A-stability`) | 0.45 ± 0.37 | 0.55 ± 0.29 |
+| D (`n_neighbors=50`), 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
+| 5-D UMAP, `n_neighbors=50`, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.32 |
+
+Treat A as an exploratory seed-42 clustering. Review `umap.png` and `samples/cluster_*/_grid.jpg`. Next analysis step: peel A’s 3,348 noise points (not implemented yet).
+
+#### Companion / older CLS cluster runs
 
 | Role | Method | Run folder | Clusters | Noise |
 |------|--------|------------|----------|-------|
-| Tight visual groups | HDBSCAN `eom` | `hdbscan-eom-vitl` | 539 | 69.2% (6,000) |
-| Full-corpus taxonomy | K-means K=40 | `kmeans-k40-vitl` | 40 | 0% |
+| Full-corpus taxonomy (deterministic) | K-means K=40 on PCA | `kmeans-k40-vitl` | 40 | 0% |
+| Earlier PCA-space HDBSCAN (not the chosen cut) | HDBSCAN `eom` on PCA, `mcs=3`, `ms=1` | `hdbscan-eom-vitl` | 539 | 69.2% (6,000) |
 
 ```bash
 python src/dinov3/cluster_cls.py \
   --embeddings-run-id 20260713T131720Z \
-  --method hdbscan \
-  --hdbscan-selection-method eom \
-  --hdbscan-min-cluster-size 3 \
-  --hdbscan-min-samples 1 \
-  --run-id hdbscan-eom-vitl
-
-python src/dinov3/cluster_cls.py \
-  --embeddings-run-id 20260713T131720Z \
-  --method kmeans \
-  --n-clusters 40 \
+  --cluster-space pca --method kmeans --n-clusters 40 \
   --run-id kmeans-k40-vitl
 ```
-
-Review: `data/dinov3_cls_clusters/<run_id>/umap.png` and `samples/cluster_*/_grid.jpg`.
 
 ### Production patch embeddings (complete)
 

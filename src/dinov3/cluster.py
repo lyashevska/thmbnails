@@ -25,6 +25,7 @@ from .config import (
     DEFAULT_PCA_COMPONENTS,
     DEFAULT_PATCH_SIZE,
     DEFAULT_SAMPLES_PER_CLUSTER,
+    DEFAULT_UMAP_CLUSTER_COMPONENTS,
     DEFAULT_UMAP_MIN_DIST,
     DEFAULT_UMAP_NEIGHBORS,
     DEFAULT_VIT_PATCH_SIZE,
@@ -46,6 +47,9 @@ else:
     _IMPORT_ERROR = None
 
 
+CLUSTER_SPACES = ("pca", "umap")
+
+
 @dataclass
 class ClusterPipelineResult:
     labels: np.ndarray
@@ -54,6 +58,9 @@ class ClusterPipelineResult:
     pca_embeddings: np.ndarray
     umap_2d: np.ndarray
     explained_variance_ratio: float
+    cluster_space: str
+    cluster_embeddings: np.ndarray
+    umap_cluster_components: int | None
 
 
 def _require_cluster_deps() -> None:
@@ -107,43 +114,56 @@ def load_embedding_run(run_dir: Path) -> Tuple[np.ndarray, List[str], Dict[str, 
 CLUSTER_METHODS = ("hdbscan", "kmeans", "agglomerative")
 
 
-def run_cluster_pipeline(
+def pca_reduce(
     embeddings: np.ndarray,
     *,
-    method: str = "hdbscan",
     pca_components: int = DEFAULT_PCA_COMPONENTS,
-    umap_neighbors: int = DEFAULT_UMAP_NEIGHBORS,
-    umap_min_dist: float = DEFAULT_UMAP_MIN_DIST,
-    hdbscan_min_cluster_size: int = DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
-    hdbscan_min_samples: int = DEFAULT_HDBSCAN_MIN_SAMPLES,
-    hdbscan_selection_method: str = "leaf",
-    n_clusters: int | None = None,
     seed: int = 42,
-    compute_umap: bool = True,
-) -> ClusterPipelineResult:
+) -> Tuple[np.ndarray, int, float]:
+    """Return (pca_embeddings, n_components, explained_variance_ratio)."""
     _require_cluster_deps()
-
-    if method not in CLUSTER_METHODS:
-        raise ValueError(f"Unknown method {method!r}; choose from {CLUSTER_METHODS}")
-
     n_samples, n_features = embeddings.shape
     n_components = min(pca_components, n_samples, n_features)
-
     pca = PCA(n_components=n_components, random_state=seed)
     pca_embeddings = pca.fit_transform(embeddings)
     explained = float(np.sum(pca.explained_variance_ratio_))
+    return pca_embeddings, n_components, explained
 
-    if compute_umap:
-        reducer = umap.UMAP(
-            n_neighbors=umap_neighbors,
-            min_dist=umap_min_dist,
-            n_components=2,
-            metric="cosine",
-            random_state=seed,
-        )
-        umap_2d = reducer.fit_transform(pca_embeddings)
-    else:
-        umap_2d = np.zeros((n_samples, 2), dtype=np.float64)
+
+def umap_reduce(
+    pca_embeddings: np.ndarray,
+    *,
+    n_components: int,
+    n_neighbors: int = DEFAULT_UMAP_NEIGHBORS,
+    min_dist: float = DEFAULT_UMAP_MIN_DIST,
+    seed: int = 42,
+) -> np.ndarray:
+    _require_cluster_deps()
+    n_neighbors = min(n_neighbors, max(2, pca_embeddings.shape[0] - 1))
+    reducer = umap.UMAP(
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        n_components=min(n_components, pca_embeddings.shape[0] - 1),
+        metric="cosine",
+        random_state=seed,
+    )
+    return reducer.fit_transform(pca_embeddings)
+
+
+def cluster_in_space(
+    cluster_embeddings: np.ndarray,
+    *,
+    method: str = "hdbscan",
+    hdbscan_min_cluster_size: int = DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
+    hdbscan_min_samples: int = DEFAULT_HDBSCAN_MIN_SAMPLES,
+    hdbscan_selection_method: str = "eom",
+    n_clusters: int | None = None,
+    seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Fit labels in an already-reduced space. Returns (labels, probabilities)."""
+    _require_cluster_deps()
+    if method not in CLUSTER_METHODS:
+        raise ValueError(f"Unknown method {method!r}; choose from {CLUSTER_METHODS}")
 
     if method == "hdbscan":
         clusterer = hdbscan.HDBSCAN(
@@ -152,31 +172,130 @@ def run_cluster_pipeline(
             metric="euclidean",
             cluster_selection_method=hdbscan_selection_method,
         )
-        labels = clusterer.fit_predict(pca_embeddings)
+        labels = clusterer.fit_predict(cluster_embeddings)
         probabilities = clusterer.probabilities_
         if probabilities is None:
             probabilities = np.zeros(len(labels), dtype=np.float64)
+        return labels, probabilities
+
+    if n_clusters is None or n_clusters < 2:
+        raise ValueError(f"{method} requires --n-clusters >= 2")
+    if method == "kmeans":
+        from sklearn.cluster import KMeans
+
+        model = KMeans(n_clusters=n_clusters, random_state=seed, n_init=10)
     else:
-        if n_clusters is None or n_clusters < 2:
-            raise ValueError(f"{method} requires --n-clusters >= 2")
-        if method == "kmeans":
-            from sklearn.cluster import KMeans
+        from sklearn.cluster import AgglomerativeClustering
 
-            model = KMeans(n_clusters=n_clusters, random_state=seed, n_init=10)
+        model = AgglomerativeClustering(n_clusters=n_clusters, linkage="ward")
+    labels = model.fit_predict(cluster_embeddings)
+    probabilities = np.ones(len(labels), dtype=np.float64)
+    return labels, probabilities
+
+
+def run_cluster_pipeline(
+    embeddings: np.ndarray,
+    *,
+    method: str = "hdbscan",
+    cluster_space: str = "pca",
+    pca_components: int = DEFAULT_PCA_COMPONENTS,
+    umap_cluster_components: int = DEFAULT_UMAP_CLUSTER_COMPONENTS,
+    umap_neighbors: int = DEFAULT_UMAP_NEIGHBORS,
+    umap_min_dist: float = DEFAULT_UMAP_MIN_DIST,
+    hdbscan_min_cluster_size: int = DEFAULT_HDBSCAN_MIN_CLUSTER_SIZE,
+    hdbscan_min_samples: int = DEFAULT_HDBSCAN_MIN_SAMPLES,
+    hdbscan_selection_method: str = "eom",
+    n_clusters: int | None = None,
+    seed: int = 42,
+    compute_umap: bool = True,
+    pca_embeddings: np.ndarray | None = None,
+    explained_variance_ratio: float | None = None,
+    fitted_pca_components: int | None = None,
+) -> ClusterPipelineResult:
+    """PCA, then cluster in PCA or in n-D UMAP. 2D UMAP is for plots only.
+
+    ``cluster_space='pca'`` is the older CLS/patch path (HDBSCAN on PCA).
+    ``cluster_space='umap'`` is the CLS sweep path (HDBSCAN on 10-D UMAP).
+    Pass precomputed ``pca_embeddings`` to skip refitting PCA (sweeps).
+    """
+    _require_cluster_deps()
+
+    if method not in CLUSTER_METHODS:
+        raise ValueError(f"Unknown method {method!r}; choose from {CLUSTER_METHODS}")
+    if cluster_space not in CLUSTER_SPACES:
+        raise ValueError(f"Unknown cluster_space {cluster_space!r}; choose from {CLUSTER_SPACES}")
+
+    n_samples = embeddings.shape[0]
+    if pca_embeddings is None:
+        pca_embeddings, n_pca, explained = pca_reduce(
+            embeddings, pca_components=pca_components, seed=seed
+        )
+    else:
+        if pca_embeddings.shape[0] != n_samples:
+            raise ValueError("pca_embeddings row count does not match embeddings")
+        n_pca = int(fitted_pca_components or pca_embeddings.shape[1])
+        explained = float(explained_variance_ratio if explained_variance_ratio is not None else 0.0)
+
+    umap_2d: np.ndarray
+    cluster_embeddings: np.ndarray
+    umap_dims: int | None = None
+
+    if cluster_space == "umap":
+        n_umap = min(umap_cluster_components, pca_embeddings.shape[1], max(2, n_samples - 1))
+        cluster_embeddings = umap_reduce(
+            pca_embeddings,
+            n_components=n_umap,
+            n_neighbors=umap_neighbors,
+            min_dist=umap_min_dist,
+            seed=seed,
+        )
+        umap_dims = int(cluster_embeddings.shape[1])
+        if compute_umap:
+            if umap_dims == 2:
+                umap_2d = cluster_embeddings
+            else:
+                umap_2d = umap_reduce(
+                    pca_embeddings,
+                    n_components=2,
+                    n_neighbors=umap_neighbors,
+                    min_dist=umap_min_dist,
+                    seed=seed,
+                )
         else:
-            from sklearn.cluster import AgglomerativeClustering
+            umap_2d = np.zeros((n_samples, 2), dtype=np.float64)
+    else:
+        cluster_embeddings = pca_embeddings
+        if compute_umap:
+            umap_2d = umap_reduce(
+                pca_embeddings,
+                n_components=2,
+                n_neighbors=umap_neighbors,
+                min_dist=umap_min_dist,
+                seed=seed,
+            )
+        else:
+            umap_2d = np.zeros((n_samples, 2), dtype=np.float64)
 
-            model = AgglomerativeClustering(n_clusters=n_clusters, linkage="ward")
-        labels = model.fit_predict(pca_embeddings)
-        probabilities = np.ones(len(labels), dtype=np.float64)
+    labels, probabilities = cluster_in_space(
+        cluster_embeddings,
+        method=method,
+        hdbscan_min_cluster_size=hdbscan_min_cluster_size,
+        hdbscan_min_samples=hdbscan_min_samples,
+        hdbscan_selection_method=hdbscan_selection_method,
+        n_clusters=n_clusters,
+        seed=seed,
+    )
 
     return ClusterPipelineResult(
         labels=labels,
         probabilities=probabilities,
-        pca_components=n_components,
+        pca_components=n_pca,
         pca_embeddings=pca_embeddings,
         umap_2d=umap_2d,
         explained_variance_ratio=explained,
+        cluster_space=cluster_space,
+        cluster_embeddings=cluster_embeddings,
+        umap_cluster_components=umap_dims,
     )
 
 
