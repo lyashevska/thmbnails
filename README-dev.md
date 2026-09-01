@@ -113,22 +113,86 @@ Outputs under `data/dinov3_cls_embeddings/<run_id>/`:
 - `image_ids.json`
 - `manifest.json`
 
-Cluster (PCA → UMAP → HDBSCAN by default; also `--method kmeans` or `agglomerative`):
+Default HDBSCAN path is PCA → **10-D UMAP (cluster space)** → HDBSCAN. A separate 2D UMAP is only for `umap.png`. Older PCA-space runs (`hdbscan-eom-vitl`, `kmeans-k40-vitl`) need `--cluster-space pca`.
 
-```bash
-python src/dinov3/cluster_cls.py --embeddings-run-id <run_id>
-python src/dinov3/cluster_cls.py \
-  --embeddings-run-id <run_id> \
-  --hdbscan-min-cluster-size 3 --hdbscan-min-samples 1 --umap-neighbors 30
-```
+**Chosen CLS density clustering:** `sweep-A-n15-mcs20-ms20` (see [docs/dinov3_runs.md](docs/dinov3_runs.md) for why). Commands that produced the recorded results are below. `--embeddings-run-id` is always the CLS vector dump `20260713T131720Z`, not a cluster folder.
 
 Outputs under `data/dinov3_cls_clusters/<run_id>/`:
 
 - `cluster_assignments.csv`
 - `cluster_summary.csv`
+- `cluster_space.npy` — array HDBSCAN used (10-D UMAP or PCA)
 - `umap.png`
 - `samples/cluster_<id>/` (example thumbnails + `_grid.jpg`)
-- `manifest.json` (`clustering_type: cls`)
+- `manifest.json` (`clustering_type: cls`, plus `dbcv` / `silhouette` / `noise_fraction`)
+- `stability.json` — only when `--stability-runs` is set
+
+#### Parameter sweep (grid, no plots)
+
+99 cells: UMAP `n_neighbors` ∈ {15,30,50}, `min_dist` ∈ {0.0,0.1,0.25}, HDBSCAN `min_cluster_size` ∈ {10,20,30,50}, `min_samples` ∈ {5, 10, min_cluster_size} (duplicates dropped). Cluster space is 10-D UMAP, `eom`. Ranked by min-max **DBCV 50% / silhouette 30% / (1 − noise) 20%**. That ranking is not the winner: the composite favoured 2-cluster, 0% noise splits.
+
+```bash
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --dry-run
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z
+```
+
+Wrote `data/dinov3_cls_clusters/sweeps/20260831T172632Z/sweep.csv`.
+
+#### Shortlist (render grids)
+
+All usable cells (`n_clusters` 20–80) had `min_dist=0`. Rendered A (chosen) and B (same UMAP, coarser HDBSCAN):
+
+```bash
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --run-id sweep-A-n15-mcs20-ms20
+
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 30 --hdbscan-min-samples 10 \
+  --run-id sweep-B-n15-mcs30-ms10
+```
+
+A: 36 clusters, 38.6% noise (3,348), median size 65, DBCV 0.32. B: 32 clusters, 34.0% noise, median size 92. A was kept for tighter cores and more leftover mass for a later noise peel.
+
+Reproduce A (or any later run) with the same flags; pass `--cluster-space pca` only for the old k-means / PCA-HDBSCAN folders.
+
+#### Stability (after A was frozen, not during the search)
+
+PCA frozen; only the UMAP seed changes. Pairwise ARI and NMI (noise as a label, and assigned-only).
+
+```bash
+# A — 100 seeds (reported)
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --stability-runs 100 \
+  --run-id sweep-A-stability
+
+# D — same HDBSCAN as A, n_neighbors=50; 10 seeds (did not improve)
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
+  --umap-neighbors 50 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --stability-runs 10 \
+  --run-id sweep-D-n50-mcs20-ms20-stab10
+
+# 5-D UMAP — 10 seeds (did not improve)
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
+  --pca-components 50 --umap-components 5 \
+  --umap-neighbors 50 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --stability-runs 10 \
+  --run-id umap5-n50-mcs20-ms20-stab10
+```
+
+| Run | ARI | NMI |
+|-----|-----|-----|
+| A, 100 seeds | 0.45 ± 0.37 | 0.55 ± 0.29 |
+| D, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
+| 5-D, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.32 |
+
+Do not retune UMAP for a higher ARI. Keep A’s seed-42 labels; use `--cluster-space pca --method kmeans --n-clusters 40` (`kmeans-k40-vitl`) when a seed-proof full-corpus partition is required.
 
 ### Patch track (one vector / one cluster per 16×16 token)
 
