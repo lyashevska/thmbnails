@@ -24,6 +24,10 @@ UMAP neighbourhood size (`n_neighbors` ∈ {15, 30, 50}), UMAP `min_dist` ∈ {0
 
 Cells were scored with a composite of density-based cluster validity (DBCV, weight 0.5), silhouette on non-noise points (0.3), and one minus the noise fraction (0.2), each min–max normalised over the grid. The composite was used only to rank the grid. The operating configuration was chosen among cells with a reviewable number of clusters (approximately 20–80), non-trivial leftover mass, and median cluster size above `min_cluster_size`, then confirmed by inspecting sample montages. Visual coherence of those montages is treated as the primary validity criterion.
 
+### Stability
+
+After freezing the working cut, UMAP was refit 100 times with distinct random seeds (raw CLS held fixed; HDBSCAN knobs unchanged). Agreement among the 100 partitions was summarised as pairwise adjusted Rand index (ARI) and normalised mutual information (NMI), mean ± standard deviation over 4,950 pairs. Noise was treated as its own label in the primary scores; a second pair of scores used only images clustered in both members of a pair. The same 100-seed protocol on cut A (PCA then 10-D UMAP, same HDBSCAN knobs) is the comparison (`sweep-A-stability`).
+
 ### Residual clustering (noise peel)
 
 HDBSCAN noise is not discarded as unstructured. Thumbnails labelled \(-1\) under the working cut were extracted and the pipeline was **refit** on that subset only (new 10-D UMAP on raw CLS, same HDBSCAN knobs). A second peel repeated the procedure on remaining noise. Cluster identifiers in the combined table are offset so that round-0, round-1, and round-2 labels do not collide. Coordinates from later rounds are not plotted on the original UMAP.
@@ -36,7 +40,14 @@ The composite ranking was dominated by two-cluster, zero-noise splits of the UMA
 
 The working cut (`n_neighbors=15`, `min_dist=0`, `min_cluster_size=20`, `min_samples=20`) produced **33 clusters** and **41.1% noise** (3,558 / 8,666 images) on seed 42. Median cluster size was 54 (range 22–842). DBCV was 0.27 and silhouette 0.54. Clusters 0 and 18 (741 and 842 images) are residual rather than types; most other groups were in the tens to low hundreds. Relative to a finer cut on the same UMAP (`min_cluster_size=10`, `min_samples=10`: 71 clusters, 43.2% noise, median size 31), the working cut was preferred for tighter cores and a reviewable number of groups, with leftover mass for residual clustering.
 
-This partition is reported as an **exploratory, seed-42 density clustering**, not as a unique 33-type taxonomy. UMAP+HDBSCAN on this corpus is seed-sensitive (documented on a same-knob PCA-then-UMAP companion: mean pairwise ARI 0.45 over 100 seeds). Where a seed-invariant labelling of every thumbnail is required, the \(K=40\) k-means partition on PCA is used instead.
+### Stability
+
+Over 100 UMAP seeds, mean pairwise ARI was **0.47 (SD 0.35)** and NMI **0.57 (SD 0.24)**. Restricting to points clustered in both runs did not change the picture (ARI 0.53, SD 0.42; NMI 0.66, SD 0.27). Cut A, with the same knobs after a PCA step, was indistinguishable on this protocol (ARI 0.45, SD 0.37; NMI 0.55, SD 0.29; assigned-only ARI 0.50, NMI 0.61). The large standard deviations indicate a mixture of working-cut-like partitions and collapsed maps rather than a tight plateau. Dropping PCA did not stabilise the typology. The working cut is therefore reported as an **exploratory, seed-42 density clustering**, not as a unique 33-type taxonomy. Where a seed-invariant labelling of every thumbnail is required, the \(K=40\) k-means partition on PCA is used instead.
+
+| Probe | ARI | NMI | Assigned-only ARI | Assigned-only NMI |
+|-------|-----|-----|-------------------|-------------------|
+| Working cut, 100 seeds (`nopca-n15-mcs20-ms20-stability`) | 0.47 ± 0.35 | 0.57 ± 0.24 | 0.53 ± 0.42 | 0.66 ± 0.27 |
+| Cut A, 100 seeds (`sweep-A-stability`) | 0.45 ± 0.37 | 0.55 ± 0.29 | 0.50 ± 0.42 | 0.61 ± 0.31 |
 
 ### Noise peels
 
