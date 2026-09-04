@@ -220,7 +220,7 @@ Do not retune UMAP for a higher ARI. Keep A’s seed-42 labels; use `--cluster-s
 
 #### Noise peel (Sweep A leftovers)
 
-Refit PCA + 10-D UMAP on thumbnails with `cluster_id=-1` in the parent run. Knobs default to the parent manifest (A: `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`). Each round is a new folder; inspect grids before chaining `--rounds`.
+Refit PCA + 10-D UMAP on thumbnails with `cluster_id=-1` in the parent run (or raw CLS → UMAP if the parent used `--skip-pca`). Knobs default to the parent manifest (A / no-PCA cut: `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`). Each round is a new folder; inspect grids before chaining `--rounds`.
 
 ```bash
 python src/dinov3/cluster_cls_peel.py \
@@ -234,6 +234,15 @@ python src/dinov3/cluster_cls_peel.py \
 ```
 
 Writes `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20-r1/` (same files as `cluster_cls.py`) and `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20-peels/combined_assignments.csv` (`cluster_id` offset across rounds, plus `round` / `cluster_id_in_round`). Remaining noise stays `-1`. UMAP coordinates on peeled rows are from that round’s map, not A’s.
+
+Same two-round peel on the skip-PCA cut:
+
+```bash
+python src/dinov3/cluster_cls_peel.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --rounds 2
+```
+
+Wrote `nopca-n15-mcs20-ms20-r1/`, `-r2/`, and `nopca-n15-mcs20-ms20-peels/combined_assignments.csv` (53 cluster ids, 8,034 assigned, 632 remaining noise).
 
 ### Patch track (one vector / one cluster per 16×16 token)
 

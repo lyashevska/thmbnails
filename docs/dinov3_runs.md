@@ -99,6 +99,21 @@ Same 99-cell UMAP/HDBSCAN grid as cut A, but UMAP on raw 1024-D CLS (`--skip-pca
 
 Native UMAP scores slightly favour A. Shared-space silhouette (raw CLS cosine; PCA-50 euclidean) slightly favours the no-PCA cut. Assigned-only ARI vs A is 0.90 (cores agree; noise assignment differs). Comparison: `compare-sweep-A-n15-mcs20-ms20-vs-nopca-n15-mcs20-ms20/comparison.json`.
 
+**Noise peels (same protocol as A).** Two rounds on `cluster_id=-1`, knobs inherited (`skip-pca`, 10-D UMAP, `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`):
+
+```bash
+python src/dinov3/cluster_cls_peel.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --rounds 2
+```
+
+| Round | Folder | Input | New clusters | Remaining noise | DBCV / silhouette |
+|-------|--------|------:|-------------:|----------------:|-------------------|
+| 0 | `nopca-n15-mcs20-ms20` | 8,666 | 33 | 41.1% (3,558) | 0.27 / 0.54 |
+| 1 | `nopca-n15-mcs20-ms20-r1` | 3,558 | 11 | 35.2% (1,254) | 0.07 / 0.13 |
+| 2 | `nopca-n15-mcs20-ms20-r2` | 1,254 | 9 | 50.4% (632) | 0.23 / 0.45 |
+
+Combined (`nopca-n15-mcs20-ms20-peels/`): **53** cluster ids, **8,034** assigned (92.7%), **632** still noise (7.3%). Round 0 remains the primary taxonomy (5,108 images). Round 1 residual pile is folder **3** (combined id **36**; 1,402 images, 39.4% of r1). Round 0 folders **0** and **18** (741 and 842) are the same oversized mixed groups as in A. Inspect `samples/cluster_*/_grid.jpg` on r1 (other than 3) and r2 before naming extra types.
+
 ```bash
 python src/dinov3/cluster_cls.py \
   --embeddings-run-id 20260713T131720Z \

@@ -360,6 +360,9 @@ def main() -> None:
     combo_summary.to_csv(combo_dir / "cluster_summary.csv", index=False)
     n_assigned = int((combined["cluster_id"] >= 0).sum())
     n_noise = int((combined["cluster_id"] == -1).sum())
+    n_by_round = {
+        str(int(k)): int(v) for k, v in combined.groupby("round").size().items()
+    }
     combo_manifest = {
         "kind": "cls_noise_peel_combined",
         "parent_clusters_run_id": parent_dir.name,
@@ -369,6 +372,7 @@ def main() -> None:
         "n_assigned": n_assigned,
         "n_noise": n_noise,
         "n_clusters": int(combined.loc[combined["cluster_id"] >= 0, "cluster_id"].nunique()),
+        "n_by_round": n_by_round,
         "note": (
             "cluster_id is unique across rounds (offset). round=0 is the parent cut; "
             "round>=1 is a peel. Remaining noise has cluster_id=-1 and round=-1. "
