@@ -65,8 +65,13 @@ def dbcv_score(cluster_embeddings: np.ndarray, labels: np.ndarray) -> float | No
     return float(score)
 
 
-def silhouette_assigned(cluster_embeddings: np.ndarray, labels: np.ndarray) -> float | None:
-    """Silhouette on non-noise points in the clustering space. None if undefined."""
+def silhouette_assigned(
+    cluster_embeddings: np.ndarray,
+    labels: np.ndarray,
+    *,
+    metric: str = "euclidean",
+) -> float | None:
+    """Silhouette on non-noise points. None if undefined."""
     mask = labels >= 0
     if int(mask.sum()) < 3 or n_clusters(labels) < 2:
         return None
@@ -76,7 +81,7 @@ def silhouette_assigned(cluster_embeddings: np.ndarray, labels: np.ndarray) -> f
         score = silhouette_score(
             cluster_embeddings[mask],
             labels[mask],
-            metric="euclidean",
+            metric=metric,
         )
     except Exception:
         return None

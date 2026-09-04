@@ -2,14 +2,15 @@
 """
 Grid search for CLS HDBSCAN in 10-D UMAP (no plots).
 
-PCA is fit once. Each unique (n_neighbors, min_dist) UMAP is fit once, then
-HDBSCAN varies. Cells are ranked by min-max DBCV 50% / silhouette 30% /
-(1 - noise) 20%. Inspect sample grids for the shortlist; do not treat the
-composite as a final "best" cluster.
+PCA is fit once (or skipped with --skip-pca). Each unique (n_neighbors,
+min_dist) UMAP is fit once, then HDBSCAN varies. Cells are ranked by min-max
+DBCV 50% / silhouette 30% / (1 - noise) 20%. Inspect sample grids for the
+shortlist; do not treat the composite as a final "best" cluster.
 
 Examples:
     python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --dry-run
     python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z
+    python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --skip-pca
     python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --limit 400
 """
 
@@ -55,7 +56,17 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Sweep UMAP + HDBSCAN knobs on CLS embeddings.")
     p.add_argument("--embeddings-run-id", default=None)
     p.add_argument("--out-dir", type=Path, default=CLS_CLUSTERS_ROOT / "sweeps")
-    p.add_argument("--pca-components", type=int, default=DEFAULT_PCA_COMPONENTS)
+    p.add_argument(
+        "--pca-components",
+        type=int,
+        default=DEFAULT_PCA_COMPONENTS,
+        help="PCA width. 0 skips PCA and feeds raw CLS to UMAP.",
+    )
+    p.add_argument(
+        "--skip-pca",
+        action="store_true",
+        help="Same as --pca-components 0.",
+    )
     p.add_argument("--umap-components", type=int, default=DEFAULT_UMAP_CLUSTER_COMPONENTS)
     p.add_argument(
         "--hdbscan-selection-method",
@@ -89,9 +100,12 @@ def cell_count() -> int:
 
 def main() -> None:
     args = parse_args()
+    if args.skip_pca:
+        args.pca_components = 0
     n_cells = cell_count()
+    source = "raw CLS" if args.pca_components <= 0 else f"PCA-{args.pca_components}"
     print(
-        f"Grid: {n_cells} cells  umap_components={args.umap_components}  "
+        f"Grid: {n_cells} cells  source={source}  umap_components={args.umap_components}  "
         f"method=hdbscan/{args.hdbscan_selection_method}"
     )
     print(f"  n_neighbors={list(UMAP_NEIGHBORS_GRID)}  min_dist={list(UMAP_MIN_DIST_GRID)}")
@@ -100,16 +114,26 @@ def main() -> None:
     if args.dry_run:
         return
 
-    print("\nStep 1: Load embeddings and fit PCA once")
     emb_run_dir = resolve_embeddings_run(run_id=args.embeddings_run_id)
     embeddings, image_ids, emb_manifest = load_embedding_run(emb_run_dir)
     if args.limit:
         embeddings = embeddings[: args.limit]
         image_ids = image_ids[: args.limit]
-    pca_embeddings, n_pca, explained = pca_reduce(
-        embeddings, pca_components=args.pca_components, seed=args.seed
-    )
-    print(f"  embeddings_run={emb_run_dir.name}  n={len(image_ids)}  pca={n_pca}  var={explained:.3f}")
+    if args.pca_components <= 0:
+        print("\nStep 1: Load embeddings (no PCA)")
+        umap_source = embeddings
+        n_pca = 0
+        explained = 1.0
+        print(f"  embeddings_run={emb_run_dir.name}  n={len(image_ids)}  pca=skipped")
+    else:
+        print("\nStep 1: Load embeddings and fit PCA once")
+        umap_source, n_pca, explained = pca_reduce(
+            embeddings, pca_components=args.pca_components, seed=args.seed
+        )
+        print(
+            f"  embeddings_run={emb_run_dir.name}  n={len(image_ids)}  "
+            f"pca={n_pca}  var={explained:.3f}"
+        )
 
     run_id = args.run_id or run_id_now()
     out_dir = args.out_dir / run_id
@@ -123,7 +147,7 @@ def main() -> None:
     for n_neighbors, min_dist in product(UMAP_NEIGHBORS_GRID, UMAP_MIN_DIST_GRID):
         print(f"  UMAP n_neighbors={n_neighbors} min_dist={min_dist} ...")
         cluster_embeddings = umap_reduce(
-            pca_embeddings,
+            umap_source,
             n_components=args.umap_components,
             n_neighbors=n_neighbors,
             min_dist=min_dist,
@@ -185,7 +209,17 @@ def main() -> None:
         "hdbscan_min_samples",
         "size_median",
     ]
+    print("Composite leaders (often 2-cluster splits; not the operating cut):")
     print(top[cols].to_string(index=False))
+
+    usable = sweep[(sweep["n_clusters"] >= 20) & (sweep["n_clusters"] <= 80)]
+    print(f"\nUsable band (n_clusters 20–80): {len(usable)} cells")
+    if usable.empty:
+        print("  none")
+        usable_top = usable
+    else:
+        usable_top = usable.head(args.top_k)
+        print(usable_top[cols].to_string(index=False))
 
     manifest: Dict[str, Any] = {
         "run_id": run_id,
@@ -194,6 +228,7 @@ def main() -> None:
         "embeddings_model": emb_manifest.get("model_id"),
         "n_images": len(image_ids),
         "pca_components": n_pca,
+        "skip_pca": n_pca == 0,
         "explained_variance_ratio": explained,
         "umap_components": args.umap_components,
         "cluster_space": "umap",
@@ -212,6 +247,7 @@ def main() -> None:
             "min_samples": [x if x != "mcs" else "min_cluster_size" for x in MIN_SAMPLES_GRID],
         },
         "top": top[cols].to_dict(orient="records"),
+        "usable_top": usable_top[cols].to_dict(orient="records") if len(usable_top) else [],
         "note": (
             "Composite ranks the grid only. Inspect umap.png and sample grids for the "
             "shortlist. Prefer tight cores with leftover mass if a later noise peel is planned. "

@@ -91,6 +91,13 @@ Noise peel (refit 10-D UMAP on A’s 3,348 leftovers, same knobs): `python src/d
 |------|--------|------------|----------|-------|
 | Full-corpus taxonomy (deterministic) | K-means K=40 on PCA | `kmeans-k40-vitl` | 40 | 0% |
 | Earlier PCA-space HDBSCAN (not the chosen cut) | HDBSCAN `eom` on PCA, `mcs=3`, `ms=1` | `hdbscan-eom-vitl` | 539 | 69.2% (6,000) |
+| Skip-PCA ablation (UMAP on raw CLS) | 10-D UMAP + HDBSCAN, same knobs as A | `nopca-n15-mcs20-ms20` | 33 | 41.1% (3,558) |
+
+#### Skip-PCA ablation: `nopca-n15-mcs20-ms20`
+
+Same 99-cell UMAP/HDBSCAN grid as cut A, but UMAP on raw 1024-D CLS (`--skip-pca`). Sweep: `sweeps/nopca`. Composite leaders were again 2-cluster, 0% noise splits and were discarded. The usable band (`n_clusters` 20–80) had 12 cells; the winner used **the same knobs as A** (`n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`): 33 clusters, 41.1% noise, median size 54, DBCV 0.27, silhouette 0.54.
+
+Native UMAP scores slightly favour A. Shared-space silhouette (raw CLS cosine; PCA-50 euclidean) slightly favours the no-PCA cut. Assigned-only ARI vs A is 0.90 (cores agree; noise assignment differs). Comparison: `compare-sweep-A-n15-mcs20-ms20-vs-nopca-n15-mcs20-ms20/comparison.json`.
 
 ```bash
 python src/dinov3/cluster_cls.py \

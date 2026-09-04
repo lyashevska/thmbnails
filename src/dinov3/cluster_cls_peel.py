@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Re-cluster HDBSCAN noise from a parent CLS run (refit PCA + n-D UMAP on leftovers).
+Re-cluster HDBSCAN noise from a parent CLS run (refit PCA + n-D UMAP on leftovers,
+or raw CLS → UMAP if the parent used --skip-pca).
 
 Default recipe for Sweep A: inherit knobs from the parent manifest
 (10-D UMAP, n_neighbors=15, min_dist=0, eom, min_cluster_size=20, min_samples=20).
@@ -289,7 +290,8 @@ def main() -> None:
     last_parent_name = parent_dir.name
 
     for round_n in range(1, args.rounds + 1):
-        print(f"\nStep 2.{round_n}: Refit PCA → UMAP → HDBSCAN on {len(current_ids)} leftovers")
+        src = "raw CLS" if knobs["pca_components"] <= 0 else "PCA"
+        print(f"\nStep 2.{round_n}: Refit {src} → UMAP → HDBSCAN on {len(current_ids)} leftovers")
         subset, subset_ids = subset_embeddings(embeddings, image_ids, current_ids)
         result = run_cluster_pipeline(
             subset,

@@ -113,7 +113,7 @@ Outputs under `data/dinov3_cls_embeddings/<run_id>/`:
 - `image_ids.json`
 - `manifest.json`
 
-Default HDBSCAN path is PCA → **10-D UMAP (cluster space)** → HDBSCAN. A separate 2D UMAP is only for `umap.png`. Older PCA-space runs (`hdbscan-eom-vitl`, `kmeans-k40-vitl`) need `--cluster-space pca`.
+Default HDBSCAN path is PCA → **10-D UMAP (cluster space)** → HDBSCAN. A separate 2D UMAP is only for `umap.png`. Pass `--skip-pca` (or `--pca-components 0`) to run UMAP on raw CLS. Older PCA-space runs (`hdbscan-eom-vitl`, `kmeans-k40-vitl`) need `--cluster-space pca`.
 
 **Chosen CLS density clustering:** `sweep-A-n15-mcs20-ms20` (see [docs/dinov3_runs.md](docs/dinov3_runs.md) for why). Commands that produced the recorded results are below. `--embeddings-run-id` is always the CLS vector dump `20260713T131720Z`, not a cluster folder.
 
@@ -137,6 +137,30 @@ python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z
 ```
 
 Wrote `data/dinov3_cls_clusters/sweeps/20260831T172632Z/sweep.csv`.
+
+Same grid with PCA skipped (UMAP on raw 1024-D CLS):
+
+```bash
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --skip-pca --dry-run
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --skip-pca \
+  --run-id nopca
+```
+
+Shortlist with the same rule as cut A (discard 2-cluster composite leaders; keep `n_clusters` 20–80). Then render and compare:
+
+```bash
+The no-PCA usable-band winner used the same knobs as cut A (`n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`):
+
+```bash
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z --skip-pca \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --run-id nopca-n15-mcs20-ms20
+
+python src/dinov3/compare_cluster_runs.py \
+  --run-a sweep-A-n15-mcs20-ms20 --label-a PCA-UMAP \
+  --run-b nopca-n15-mcs20-ms20 --label-b UMAP
+```
 
 #### Shortlist (render grids)
 
