@@ -105,4 +105,4 @@ DINOv3 embeddings are not human-readable labels. They are continuous feature vec
 
 ### CLS clustering (chosen cut)
 
-Thumbnail-level clusters are obtained by PCA (50 components) then HDBSCAN on a **10-D UMAP** (`n_neighbors=15`, `min_dist=0`, `eom`, `min_cluster_size=20`, `min_samples=20`). A 2-D UMAP is used only for plots. The working run is `sweep-A-n15-mcs20-ms20` (36 clusters, 38.6% noise on seed 42), with two residual peels of leftover noise. Publication-oriented methods and results: [cls_clustering.md](cls_clustering.md). Commands and run IDs: [README-dev.md](../README-dev.md), [dinov3_runs.md](dinov3_runs.md).
+Thumbnail-level clusters are obtained by HDBSCAN on a **10-D UMAP of the raw 1024-D CLS vectors** (`n_neighbors=15`, `min_dist=0`, `eom`, `min_cluster_size=20`, `min_samples=20`). There is no PCA step. A 2-D UMAP is used only for plots. The working run is `nopca-n15-mcs20-ms20` (33 clusters, 41.1% noise on seed 42), with two residual peels of leftover noise. Publication-oriented methods and results: [cls_clustering.md](cls_clustering.md). Commands and run IDs: [README-dev.md](../README-dev.md), [dinov3_runs.md](dinov3_runs.md).

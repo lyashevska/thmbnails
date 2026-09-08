@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Re-cluster HDBSCAN noise from a parent CLS run (refit PCA + n-D UMAP on leftovers).
+Re-cluster HDBSCAN noise from a parent CLS run (refit PCA + n-D UMAP on leftovers,
+or raw CLS → UMAP if the parent used --skip-pca).
 
 Default recipe for Sweep A: inherit knobs from the parent manifest
 (10-D UMAP, n_neighbors=15, min_dist=0, eom, min_cluster_size=20, min_samples=20).
@@ -289,7 +290,8 @@ def main() -> None:
     last_parent_name = parent_dir.name
 
     for round_n in range(1, args.rounds + 1):
-        print(f"\nStep 2.{round_n}: Refit PCA → UMAP → HDBSCAN on {len(current_ids)} leftovers")
+        src = "raw CLS" if knobs["pca_components"] <= 0 else "PCA"
+        print(f"\nStep 2.{round_n}: Refit {src} → UMAP → HDBSCAN on {len(current_ids)} leftovers")
         subset, subset_ids = subset_embeddings(embeddings, image_ids, current_ids)
         result = run_cluster_pipeline(
             subset,
@@ -358,6 +360,9 @@ def main() -> None:
     combo_summary.to_csv(combo_dir / "cluster_summary.csv", index=False)
     n_assigned = int((combined["cluster_id"] >= 0).sum())
     n_noise = int((combined["cluster_id"] == -1).sum())
+    n_by_round = {
+        str(int(k)): int(v) for k, v in combined.groupby("round").size().items()
+    }
     combo_manifest = {
         "kind": "cls_noise_peel_combined",
         "parent_clusters_run_id": parent_dir.name,
@@ -367,6 +372,7 @@ def main() -> None:
         "n_assigned": n_assigned,
         "n_noise": n_noise,
         "n_clusters": int(combined.loc[combined["cluster_id"] >= 0, "cluster_id"].nunique()),
+        "n_by_round": n_by_round,
         "note": (
             "cluster_id is unique across rounds (offset). round=0 is the parent cut; "
             "round>=1 is a peel. Remaining noise has cluster_id=-1 and round=-1. "

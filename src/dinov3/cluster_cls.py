@@ -3,8 +3,9 @@
 CLS thumbnail clustering (one label per image).
 
 Default HDBSCAN path: PCA → 10-D UMAP (cluster space) → HDBSCAN, with a
-separate 2D UMAP for umap.png. Pass --cluster-space pca to reproduce older
-runs that clustered in PCA. For patch-token clusters, use cluster_patch.py.
+separate 2D UMAP for umap.png. Pass --pca-components 0 / --skip-pca to run
+UMAP on raw CLS. Pass --cluster-space pca to reproduce older runs that
+clustered in PCA. For patch-token clusters, use cluster_patch.py.
 
 Reads a completed embedding run from data/dinov3_cls_embeddings/<run_id>/ and writes:
   cluster_assignments.csv
@@ -17,6 +18,7 @@ Reads a completed embedding run from data/dinov3_cls_embeddings/<run_id>/ and wr
 
 Examples:
     python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z
+    python src/dinov3/cluster_cls.py --skip-pca --umap-neighbors 15 --umap-min-dist 0.0
     python src/dinov3/cluster_cls.py --cluster-space pca --method kmeans --n-clusters 40
     python src/dinov3/cluster_cls.py --stability-runs 100
 """
@@ -87,7 +89,17 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CLUSTER_SPACE,
         help="HDBSCAN/k-means geometry: umap (default, n-D UMAP) or pca (older runs).",
     )
-    p.add_argument("--pca-components", type=int, default=DEFAULT_PCA_COMPONENTS)
+    p.add_argument(
+        "--pca-components",
+        type=int,
+        default=DEFAULT_PCA_COMPONENTS,
+        help="PCA width. 0 skips PCA and feeds raw CLS to UMAP (umap space only).",
+    )
+    p.add_argument(
+        "--skip-pca",
+        action="store_true",
+        help="Same as --pca-components 0.",
+    )
     p.add_argument("--umap-components", type=int, default=DEFAULT_UMAP_CLUSTER_COMPONENTS)
     p.add_argument("--umap-neighbors", type=int, default=DEFAULT_UMAP_NEIGHBORS)
     p.add_argument("--umap-min-dist", type=float, default=DEFAULT_UMAP_MIN_DIST)
@@ -123,9 +135,10 @@ def _run_stability(
     args: argparse.Namespace,
     reference_labels: np.ndarray,
 ) -> Dict[str, Any]:
-    """Vary only the UMAP seed; PCA stays fixed. First partition is the main run."""
+    """Vary only the UMAP seed; the UMAP source stays fixed. First partition is the main run."""
     n_runs = args.stability_runs
-    print(f"\nStability: {n_runs} UMAP seeds (PCA frozen)")
+    src = "raw CLS" if args.pca_components <= 0 else "PCA"
+    print(f"\nStability: {n_runs} UMAP seeds ({src} frozen)")
     label_runs: List[np.ndarray] = [np.asarray(reference_labels)]
     for i in range(1, n_runs):
         seed = args.seed + i
@@ -166,6 +179,8 @@ def _run_stability(
 
 def main() -> None:
     args = parse_args()
+    if args.skip_pca:
+        args.pca_components = 0
 
     print("Step 1: Load embeddings")
     emb_run_dir = resolve_embeddings_run(run_id=args.embeddings_run_id)
@@ -178,7 +193,8 @@ def main() -> None:
         if args.cluster_space == "umap"
         else "PCA"
     )
-    print(f"\nStep 2: PCA → {space_label} → {args.method.upper()}")
+    source_label = "raw CLS" if args.pca_components <= 0 else "PCA"
+    print(f"\nStep 2: {source_label} → {space_label} → {args.method.upper()}")
     result = run_cluster_pipeline(
         embeddings,
         method=args.method,
@@ -198,7 +214,13 @@ def main() -> None:
         result.labels,
         min_cluster_size=args.hdbscan_min_cluster_size if args.method == "hdbscan" else None,
     )
-    print(f"  pca_components={result.pca_components}  explained_var={result.explained_variance_ratio:.3f}")
+    if result.pca_components == 0:
+        print("  pca skipped (UMAP on raw CLS)")
+    else:
+        print(
+            f"  pca_components={result.pca_components}  "
+            f"explained_var={result.explained_variance_ratio:.3f}"
+        )
     print(
         f"  clusters={quality['n_clusters']}  noise={quality['n_noise']} "
         f"({100 * quality['noise_fraction']:.1f}%)"
@@ -269,6 +291,7 @@ def main() -> None:
         "cluster_space": result.cluster_space,
         "cluster_space_shape": list(result.cluster_embeddings.shape),
         "pca_components": result.pca_components,
+        "skip_pca": result.pca_components == 0,
         "explained_variance_ratio": result.explained_variance_ratio,
         "umap_cluster_components": result.umap_cluster_components,
         "umap_neighbors": args.umap_neighbors,

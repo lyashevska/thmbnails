@@ -113,9 +113,9 @@ Outputs under `data/dinov3_cls_embeddings/<run_id>/`:
 - `image_ids.json`
 - `manifest.json`
 
-Default HDBSCAN path is PCA → **10-D UMAP (cluster space)** → HDBSCAN. A separate 2D UMAP is only for `umap.png`. Older PCA-space runs (`hdbscan-eom-vitl`, `kmeans-k40-vitl`) need `--cluster-space pca`.
+Chosen HDBSCAN path is raw CLS → **10-D UMAP (cluster space)** → HDBSCAN (`--skip-pca` or `--pca-components 0`). A separate 2D UMAP is only for `umap.png`. Omit `--skip-pca` to run PCA first (cut A). Older PCA-space runs (`hdbscan-eom-vitl`, `kmeans-k40-vitl`) need `--cluster-space pca`.
 
-**Chosen CLS density clustering:** `sweep-A-n15-mcs20-ms20` (see [docs/dinov3_runs.md](docs/dinov3_runs.md) for why). Commands that produced the recorded results are below. `--embeddings-run-id` is always the CLS vector dump `20260713T131720Z`, not a cluster folder.
+**Chosen CLS density clustering:** `nopca-n15-mcs20-ms20` (see [docs/dinov3_runs.md](docs/dinov3_runs.md) for why). Commands that produced the recorded results are below. `--embeddings-run-id` is always the CLS vector dump `20260713T131720Z`, not a cluster folder.
 
 Outputs under `data/dinov3_cls_clusters/<run_id>/`:
 
@@ -129,7 +129,19 @@ Outputs under `data/dinov3_cls_clusters/<run_id>/`:
 
 #### Parameter sweep (grid, no plots)
 
-99 cells: UMAP `n_neighbors` ∈ {15,30,50}, `min_dist` ∈ {0.0,0.1,0.25}, HDBSCAN `min_cluster_size` ∈ {10,20,30,50}, `min_samples` ∈ {5, 10, min_cluster_size} (duplicates dropped). Cluster space is 10-D UMAP, `eom`. Ranked by min-max **DBCV 50% / silhouette 30% / (1 − noise) 20%**. That ranking is not the winner: the composite favoured 2-cluster, 0% noise splits.
+99 cells: UMAP `n_neighbors` ∈ {15,30,50}, `min_dist` ∈ {0.0,0.1,0.25}, HDBSCAN `min_cluster_size` ∈ {10,20,30,50}, `min_samples` ∈ {5, 10, min_cluster_size} (duplicates dropped). Cluster space is 10-D UMAP, `eom`. Ranked by min-max **DBCV 50% / silhouette 30% / (1 − noise) 20%**. That ranking is not the winner: the composite favoured 2-cluster, 0% noise splits. Shortlist by discarding those leaders and keeping `n_clusters` 20–80.
+
+Chosen sweep (UMAP on raw 1024-D CLS):
+
+```bash
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --skip-pca --dry-run
+python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --skip-pca \
+  --run-id nopca
+```
+
+Wrote `data/dinov3_cls_clusters/sweeps/nopca/sweep.csv`.
+
+PCA-first comparison grid (cut A):
 
 ```bash
 python src/dinov3/cluster_cls_sweep.py --embeddings-run-id 20260713T131720Z --dry-run
@@ -140,7 +152,22 @@ Wrote `data/dinov3_cls_clusters/sweeps/20260831T172632Z/sweep.csv`.
 
 #### Shortlist (render grids)
 
-All usable cells (`n_clusters` 20–80) had `min_dist=0`. Rendered A (chosen) and B (same UMAP, coarser HDBSCAN):
+All usable cells (`n_clusters` 20–80) had `min_dist=0`. The no-PCA usable-band winner used `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20` (same knobs as cut A):
+
+```bash
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z --skip-pca \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --run-id nopca-n15-mcs20-ms20
+
+python src/dinov3/compare_cluster_runs.py \
+  --run-a sweep-A-n15-mcs20-ms20 --label-a PCA-UMAP \
+  --run-b nopca-n15-mcs20-ms20 --label-b UMAP
+```
+
+Working cut: 33 clusters, 41.1% noise (3,558), median size 54, DBCV 0.27. Assigned-only ARI vs A is 0.90. Native UMAP scores slightly favour A; shared-space silhouette slightly favours no-PCA. The extra PCA step was dropped.
+
+On the PCA-first grid, A and B (same UMAP, coarser HDBSCAN) were rendered for comparison:
 
 ```bash
 python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
@@ -154,16 +181,23 @@ python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
   --run-id sweep-B-n15-mcs30-ms10
 ```
 
-A: 36 clusters, 38.6% noise (3,348), median size 65, DBCV 0.32. B: 32 clusters, 34.0% noise, median size 92. A was kept for tighter cores and more leftover mass for a later noise peel.
+A: 36 clusters, 38.6% noise (3,348), median size 65, DBCV 0.32. B: 32 clusters, 34.0% noise, median size 92.
 
-Reproduce A (or any later run) with the same flags; pass `--cluster-space pca` only for the old k-means / PCA-HDBSCAN folders.
+Reproduce the working cut with `--skip-pca` and the flags above; pass `--cluster-space pca` only for the old k-means / PCA-HDBSCAN folders.
 
-#### Stability (after A was frozen, not during the search)
+#### Stability (after the working cut was frozen, not during the search)
 
-PCA frozen; only the UMAP seed changes. Pairwise ARI and NMI (noise as a label, and assigned-only).
+UMAP source frozen (raw CLS for the working cut; PCA for A); only the UMAP seed changes. Pairwise ARI and NMI (noise as a label, and assigned-only).
 
 ```bash
-# A — 100 seeds (reported)
+# Working cut — 100 seeds (reported)
+python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z --skip-pca \
+  --umap-neighbors 15 --umap-min-dist 0.0 \
+  --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
+  --stability-runs 100 \
+  --run-id nopca-n15-mcs20-ms20-stability
+
+# A — same knobs after PCA; 100 seeds
 python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
   --umap-neighbors 15 --umap-min-dist 0.0 \
   --hdbscan-min-cluster-size 20 --hdbscan-min-samples 20 \
@@ -188,28 +222,36 @@ python src/dinov3/cluster_cls.py --embeddings-run-id 20260713T131720Z \
 
 | Run | ARI | NMI |
 |-----|-----|-----|
+| Working cut, 100 seeds | 0.47 ± 0.35 | 0.57 ± 0.24 |
 | A, 100 seeds | 0.45 ± 0.37 | 0.55 ± 0.29 |
 | D, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
 | 5-D, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.32 |
 
-Do not retune UMAP for a higher ARI. Keep A’s seed-42 labels; use `--cluster-space pca --method kmeans --n-clusters 40` (`kmeans-k40-vitl`) when a seed-proof full-corpus partition is required.
+Do not retune UMAP for a higher ARI. Keep the working cut’s seed-42 labels; use `--cluster-space pca --method kmeans --n-clusters 40` (`kmeans-k40-vitl`) when a seed-proof full-corpus partition is required.
 
-#### Noise peel (Sweep A leftovers)
+#### Noise peel (working-cut leftovers)
 
-Refit PCA + 10-D UMAP on thumbnails with `cluster_id=-1` in the parent run. Knobs default to the parent manifest (A: `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`). Each round is a new folder; inspect grids before chaining `--rounds`.
+Refit 10-D UMAP on thumbnails with `cluster_id=-1` in the parent run (raw CLS if the parent used `--skip-pca`). Knobs default to the parent manifest (`n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`). Each round is a new folder; inspect grids before chaining `--rounds`.
 
 ```bash
 python src/dinov3/cluster_cls_peel.py \
-  --from-clusters-run-id sweep-A-n15-mcs20-ms20 --dry-run
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --dry-run
 
 python src/dinov3/cluster_cls_peel.py \
-  --from-clusters-run-id sweep-A-n15-mcs20-ms20
+  --from-clusters-run-id nopca-n15-mcs20-ms20
 
+python src/dinov3/cluster_cls_peel.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --rounds 2
+```
+
+Writes `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20-r1/` (same files as `cluster_cls.py`) and `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20-peels/combined_assignments.csv` (`cluster_id` offset across rounds, plus `round` / `cluster_id_in_round`). Remaining noise stays `-1`. UMAP coordinates on peeled rows are from that round’s map, not the parent’s. Combined: 53 cluster ids, 8,034 assigned, 632 remaining noise.
+
+Same protocol on the PCA-first cut A:
+
+```bash
 python src/dinov3/cluster_cls_peel.py \
   --from-clusters-run-id sweep-A-n15-mcs20-ms20 --rounds 3
 ```
-
-Writes `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20-r1/` (same files as `cluster_cls.py`) and `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20-peels/combined_assignments.csv` (`cluster_id` offset across rounds, plus `round` / `cluster_id_in_round`). Remaining noise stays `-1`. UMAP coordinates on peeled rows are from that round’s map, not A’s.
 
 ### Patch track (one vector / one cluster per 16×16 token)
 

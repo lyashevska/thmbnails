@@ -55,40 +55,57 @@ Each CLS embedding run records `model_timing` in `manifest.json` (load, inferenc
 
 Embeddings `20260713T131720Z`. Commands: [README-dev.md](../README-dev.md).
 
-#### Chosen density clustering (UMAP + HDBSCAN): `sweep-A-n15-mcs20-ms20`
+#### Chosen density clustering (UMAP + HDBSCAN): `nopca-n15-mcs20-ms20`
 
 Working labels for visual interpretation. **Not** a seed-proof taxonomy.
 
 | Setting | Value |
 |---------|-------|
-| Path | `data/dinov3_cls_clusters/sweep-A-n15-mcs20-ms20` |
-| Cluster space | 10-D UMAP (PCA 50 → 59% variance; 2-D UMAP is plot-only) |
+| Path | `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20` |
+| Cluster space | 10-D UMAP of raw 1024-D CLS (no PCA; 2-D UMAP is plot-only) |
 | UMAP | `n_neighbors=15`, `min_dist=0.0` |
 | HDBSCAN | `eom`, `min_cluster_size=20`, `min_samples=20` |
 | Seed | 42 |
-| Clusters | 36 |
-| Noise | 38.6% (3,348) |
-| Median cluster size | 65 |
-| DBCV / silhouette | 0.32 / 0.59 |
+| Clusters | 33 |
+| Noise | 41.1% (3,558) |
+| Median cluster size | 54 |
+| DBCV / silhouette | 0.27 / 0.54 |
 
-**Why A.** A 99-cell sweep (`sweeps/20260831T172632Z`) ranked cells with DBCV 50% / silhouette 30% / (1 − noise) 20%. The composite winner was a **2-cluster, 0% noise** split (median size 4,333) and was discarded. Every cell with ≥ 20 clusters had `min_dist=0`. In that band, A had the best composite, tighter cores than B (same UMAP; `mcs=30`, `ms=10` → 32 clusters, 34% noise, median 92), and leftover mass for a later noise peel.
+**Why this cut.** Same 99-cell UMAP/HDBSCAN grid as the earlier PCA-first sweep, but UMAP on raw CLS (`--skip-pca`). Sweep: `sweeps/nopca`. Composite leaders were **2-cluster, 0% noise** splits (median size 4,333) and were discarded. The usable band (`n_clusters` 20–80) had 12 cells; almost all had `min_dist=0`. The winner used `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20` — the same knobs as PCA-first cut A (`sweep-A-n15-mcs20-ms20`: 36 clusters, 38.6% noise).
 
-**Stability (UMAP seeds, knobs frozen).** Pairwise ARI/NMI. Raising `n_neighbors` to 50 or dropping UMAP to 5-D did not help.
+Native UMAP scores slightly favour A. Shared-space silhouette (raw CLS cosine; PCA-50 euclidean) slightly favours this cut. Assigned-only ARI vs A is 0.90 (cores agree; noise assignment differs). The extra PCA step was dropped as unnecessary. Comparison: `compare-sweep-A-n15-mcs20-ms20-vs-nopca-n15-mcs20-ms20/comparison.json`.
+
+**Stability (UMAP seeds, knobs frozen).** Pairwise ARI/NMI. Dropping PCA did not stabilise the typology. Raising `n_neighbors` to 50 or dropping UMAP to 5-D (PCA path) did not help.
 
 | Probe | ARI | NMI |
 |-------|-----|-----|
-| A, 100 seeds (`sweep-A-stability`) | 0.45 ± 0.37 | 0.55 ± 0.29 |
-| D (`n_neighbors=50`), 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
+| Working cut, 100 seeds (`nopca-n15-mcs20-ms20-stability`) | 0.47 ± 0.35 | 0.57 ± 0.24 |
+| A (PCA then 10-D UMAP), 100 seeds (`sweep-A-stability`) | 0.45 ± 0.37 | 0.55 ± 0.29 |
+| D (`n_neighbors=50`, PCA), 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.33 |
 | 5-D UMAP, `n_neighbors=50`, 10 seeds | 0.51 ± 0.41 | 0.58 ± 0.32 |
 
-Treat A as an exploratory seed-42 clustering. Review `umap.png` and `samples/cluster_*/_grid.jpg`.
+Treat this as an exploratory seed-42 clustering. Review `umap.png` and `samples/cluster_*/_grid.jpg`.
 
-Noise peel (refit 10-D UMAP on A’s 3,348 leftovers, same knobs): `python src/dinov3/cluster_cls_peel.py --from-clusters-run-id sweep-A-n15-mcs20-ms20`. Output `sweep-A-n15-mcs20-ms20-r1/` plus `sweep-A-n15-mcs20-ms20-peels/combined_assignments.csv`. See [README-dev.md](../README-dev.md).
+**Noise peels.** Two rounds on `cluster_id=-1`, knobs inherited (`skip-pca`, 10-D UMAP, `n_neighbors=15`, `min_dist=0`, `mcs=20`, `ms=20`, `eom`):
+
+```bash
+python src/dinov3/cluster_cls_peel.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --rounds 2
+```
+
+| Round | Folder | Input | New clusters | Remaining noise | DBCV / silhouette |
+|-------|--------|------:|-------------:|----------------:|-------------------|
+| 0 | `nopca-n15-mcs20-ms20` | 8,666 | 33 | 41.1% (3,558) | 0.27 / 0.54 |
+| 1 | `nopca-n15-mcs20-ms20-r1` | 3,558 | 11 | 35.2% (1,254) | 0.07 / 0.13 |
+| 2 | `nopca-n15-mcs20-ms20-r2` | 1,254 | 9 | 50.4% (632) | 0.23 / 0.45 |
+
+Combined (`nopca-n15-mcs20-ms20-peels/`): **53** cluster ids, **8,034** assigned (92.7%), **632** still noise (7.3%). Round 0 remains the primary taxonomy (5,108 images). Round 1 residual pile is folder **3** (combined id **36**; 1,402 images, 39.4% of r1). Round 0 folders **0** and **18** (741 and 842) are oversized mixed groups. Inspect `samples/cluster_*/_grid.jpg` on r1 (other than 3) and r2 before naming extra types.
 
 #### Companion / older CLS cluster runs
 
 | Role | Method | Run folder | Clusters | Noise |
 |------|--------|------------|----------|-------|
+| PCA-first usable-band winner (same knobs; extra PCA) | PCA → 10-D UMAP + HDBSCAN | `sweep-A-n15-mcs20-ms20` | 36 | 38.6% (3,348) |
 | Full-corpus taxonomy (deterministic) | K-means K=40 on PCA | `kmeans-k40-vitl` | 40 | 0% |
 | Earlier PCA-space HDBSCAN (not the chosen cut) | HDBSCAN `eom` on PCA, `mcs=3`, `ms=1` | `hdbscan-eom-vitl` | 539 | 69.2% (6,000) |
 

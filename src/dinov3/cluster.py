@@ -220,6 +220,8 @@ def pca_reduce(
 ) -> Tuple[np.ndarray, int, float]:
     """Return (pca_embeddings, n_components, explained_variance_ratio)."""
     _require_cluster_deps()
+    if pca_components < 1:
+        raise ValueError("pca_reduce requires pca_components >= 1; use 0 on the pipeline to skip PCA")
     n_samples, n_features = embeddings.shape
     n_components = min(pca_components, n_samples, n_features)
     pca = PCA(n_components=n_components, random_state=seed)
@@ -229,23 +231,24 @@ def pca_reduce(
 
 
 def umap_reduce(
-    pca_embeddings: np.ndarray,
+    features: np.ndarray,
     *,
     n_components: int,
     n_neighbors: int = DEFAULT_UMAP_NEIGHBORS,
     min_dist: float = DEFAULT_UMAP_MIN_DIST,
     seed: int = 42,
 ) -> np.ndarray:
+    """UMAP on PCA coordinates or raw embeddings (cosine)."""
     _require_cluster_deps()
-    n_neighbors = min(n_neighbors, max(2, pca_embeddings.shape[0] - 1))
+    n_neighbors = min(n_neighbors, max(2, features.shape[0] - 1))
     reducer = umap.UMAP(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
-        n_components=min(n_components, pca_embeddings.shape[0] - 1),
+        n_components=min(n_components, features.shape[0] - 1),
         metric="cosine",
         random_state=seed,
     )
-    return reducer.fit_transform(pca_embeddings)
+    return reducer.fit_transform(features)
 
 
 def cluster_in_space(
@@ -310,11 +313,13 @@ def run_cluster_pipeline(
     explained_variance_ratio: float | None = None,
     fitted_pca_components: int | None = None,
 ) -> ClusterPipelineResult:
-    """PCA, then cluster in PCA or in n-D UMAP. 2D UMAP is for plots only.
+    """Optionally PCA, then cluster in that space or in n-D UMAP. 2D UMAP is for plots only.
 
     ``cluster_space='pca'`` is the older CLS/patch path (HDBSCAN on PCA).
-    ``cluster_space='umap'`` is the CLS sweep path (HDBSCAN on 10-D UMAP).
-    Pass precomputed ``pca_embeddings`` to skip refitting PCA (sweeps).
+    ``cluster_space='umap'`` is the CLS path (HDBSCAN on n-D UMAP).
+    ``pca_components <= 0`` skips PCA and feeds raw embeddings to UMAP
+    (``cluster_space='umap'`` only). Pass precomputed ``pca_embeddings`` to skip
+    refitting PCA (sweeps).
     """
     _require_cluster_deps()
 
@@ -323,14 +328,28 @@ def run_cluster_pipeline(
     if cluster_space not in CLUSTER_SPACES:
         raise ValueError(f"Unknown cluster_space {cluster_space!r}; choose from {CLUSTER_SPACES}")
 
+    skip_pca = pca_components <= 0
+    if skip_pca and cluster_space == "pca":
+        raise ValueError("cluster_space='pca' requires pca_components >= 1")
+
     n_samples = embeddings.shape[0]
-    if pca_embeddings is None:
-        pca_embeddings, n_pca, explained = pca_reduce(
+    if skip_pca:
+        if pca_embeddings is None:
+            source = embeddings
+        else:
+            if pca_embeddings.shape[0] != n_samples:
+                raise ValueError("pca_embeddings row count does not match embeddings")
+            source = pca_embeddings
+        n_pca = 0
+        explained = 1.0
+    elif pca_embeddings is None:
+        source, n_pca, explained = pca_reduce(
             embeddings, pca_components=pca_components, seed=seed
         )
     else:
         if pca_embeddings.shape[0] != n_samples:
             raise ValueError("pca_embeddings row count does not match embeddings")
+        source = pca_embeddings
         n_pca = int(fitted_pca_components or pca_embeddings.shape[1])
         explained = float(explained_variance_ratio if explained_variance_ratio is not None else 0.0)
 
@@ -339,9 +358,9 @@ def run_cluster_pipeline(
     umap_dims: int | None = None
 
     if cluster_space == "umap":
-        n_umap = min(umap_cluster_components, pca_embeddings.shape[1], max(2, n_samples - 1))
+        n_umap = min(umap_cluster_components, source.shape[1], max(2, n_samples - 1))
         cluster_embeddings = umap_reduce(
-            pca_embeddings,
+            source,
             n_components=n_umap,
             n_neighbors=umap_neighbors,
             min_dist=umap_min_dist,
@@ -353,7 +372,7 @@ def run_cluster_pipeline(
                 umap_2d = cluster_embeddings
             else:
                 umap_2d = umap_reduce(
-                    pca_embeddings,
+                    source,
                     n_components=2,
                     n_neighbors=umap_neighbors,
                     min_dist=umap_min_dist,
@@ -362,10 +381,10 @@ def run_cluster_pipeline(
         else:
             umap_2d = np.zeros((n_samples, 2), dtype=np.float64)
     else:
-        cluster_embeddings = pca_embeddings
+        cluster_embeddings = source
         if compute_umap:
             umap_2d = umap_reduce(
-                pca_embeddings,
+                source,
                 n_components=2,
                 n_neighbors=umap_neighbors,
                 min_dist=umap_min_dist,
@@ -388,7 +407,7 @@ def run_cluster_pipeline(
         labels=labels,
         probabilities=probabilities,
         pca_components=n_pca,
-        pca_embeddings=pca_embeddings,
+        pca_embeddings=source,
         umap_2d=umap_2d,
         explained_variance_ratio=explained,
         cluster_space=cluster_space,
