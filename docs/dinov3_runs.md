@@ -53,7 +53,7 @@ Each CLS embedding run records `model_timing` in `manifest.json` (load, inferenc
 
 ### Production CLS clusters
 
-Embeddings `20260713T131720Z`. Commands: [README-dev.md](../README-dev.md).
+Embeddings `20260713T131720Z`. Commands: [README-dev.md](https://github.com/lyashevska/thmbnails/blob/main/README-dev.md).
 
 #### Chosen density clustering (UMAP + HDBSCAN): `nopca-n15-mcs20-ms20`
 

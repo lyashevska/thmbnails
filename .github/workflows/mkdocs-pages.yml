@@ -32,6 +32,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build MkDocs site
+        env:
+          # Material for MkDocs prints a MkDocs 2.0 advisory; it is not a build error.
+          NO_MKDOCS_2_WARNING: "1"
         run: mkdocs build --strict
 
       - name: Configure Pages
