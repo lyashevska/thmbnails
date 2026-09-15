@@ -1,6 +1,6 @@
 # CLS embedding clustering: methods and results
 
-Short write-up for the thumbnail-level (CLS) density clustering. Figures to inspect: `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20/umap.png` and `samples/cluster_*/_grid.jpg`; peel grids under `nopca-n15-mcs20-ms20-r1/` and `-r2/`. Run log: [dinov3_runs.md](dinov3_runs.md).
+Short write-up for the thumbnail-level (CLS) density clustering. Figures to inspect: `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20/umap.png` and `samples/cluster_*/_grid.jpg`; peel grids under `nopca-n15-mcs20-ms20-r1/` and `-r2/`; residual grids under `nopca-n15-mcs20-ms20-residual-leaf/samples/`. Run log: [dinov3_runs.md](dinov3_runs.md). Residual Stage 1 keep / skip list: [cls_residual_stage1.md](cls_residual_stage1.md).
 
 ## Methods
 
@@ -32,6 +32,10 @@ After freezing the working cut, UMAP was refit 100 times with distinct random se
 
 HDBSCAN noise is not discarded as unstructured. Thumbnails labelled \(-1\) under the working cut were extracted and the pipeline was **refit** on that subset only (new 10-D UMAP on raw CLS, same HDBSCAN knobs). A second peel repeated the procedure on remaining noise. Cluster identifiers in the combined table are offset so that round-0, round-1, and round-2 labels do not collide. Coordinates from later rounds are not plotted on the original UMAP.
 
+### Residual CLS (Stage 1)
+
+Peel removes leftover images. Residual clustering removes leftover appearance: in raw 1024-d CLS, subtract the parent-cluster mean (ungrouped thumbnails use the nearest centroid), L2-normalise, and refit UMAP+HDBSCAN on the full corpus. UMAP knobs are inherited from the parent cut. HDBSCAN is **leaf** selection with `min_samples=10` (`min_cluster_size=20` unchanged). Each image keeps its parent label and a residual label. The test is the residual montage: mixed parent clusters sharing something else, not another split by set. The operating Stage 1 run is `nopca-n15-mcs20-ms20-residual-leaf`. Inherited eom / `min_samples=20` is a control only.
+
 ## Results
 
 ### Chosen cut
@@ -56,6 +60,12 @@ Refitting the pipeline on the 3,558 unclustered thumbnails yielded **11 addition
 A second peel on the remaining 1,254 images yielded **9 clusters** and 632 noise (50.4% of that subset; **7.3% of the full corpus**). DBCV and silhouette were higher than in the first peel (0.23 and 0.45). No single group took a large share of the round (largest 160 and 145). Further peels were not run.
 
 Combining offset labels across rounds gives 53 cluster identifiers and 8,034 assigned thumbnails (92.7%). Round 0 remains the primary taxonomy (5,108 images, 33 groups). Rounds 1 and 2 are secondary looks at leftovers (2,304 and 622 images) and are not given equal interpretive weight. Sample montages for peel clusters—not the combined UMAP, whose coordinates mix incompatible maps—are the basis for accepting or rejecting those extra groups.
+
+### Residual CLS (Stage 1)
+
+The operating residual cut is **leaf**, `min_samples=10` (`nopca-n15-mcs20-ms20-residual-leaf`): **68 residual clusters** and 56.2% noise (3,798 assigned). Median residual group mixes 6 parent ids; median majority-parent fraction is 0.62. Mixed montages share a second whole-image look across parent sets — clothing (fishnets, plaid skirt), body, couple-on-bed composition, white-studio lighting — not a spatial split of sofa versus pose. Residual groups that do not mix still track parent 0 (drawing medium) or parent 18 (close-up). Each assigned thumbnail can be read as `(parent_cluster, residual_cluster)`. This is a second CLS layer, not a substitute for part-based (patch) labels. Keep / skip list and six-grid figure: [cls_residual_stage1.md](cls_residual_stage1.md).
+
+Refitting the inherited knobs (eom, `min_samples=20`) on the same residual vectors produced **2 clusters and 0% noise**: an illustrated island (708 images, 98% from parent 0) versus the remaining 7,958 (`nopca-n15-mcs20-ms20-residual/`). That is a split of the residual map, not a leftover taxonomy, and is not used.
 
 ### Unstructured labels
 
@@ -82,4 +92,4 @@ Three alternatives were fit on the same embeddings and are not used as the opera
 
 ### Interpretation for the study
 
-Density clustering of DINOv3 CLS embeddings recovers a moderate number of recurring thumbnail regimes without using titles or VLM labels. The first-pass cut leaves a large unclustered remainder by design; successive peels show that some additional local structure exists among leftovers, alongside large mixed residuals. Because UMAP+HDBSCAN partitions are seed-sensitive on this corpus, claims about specific visual types should be grounded in the seed-42 montages of the working cut (and, where grids support it, in the smaller peel folders), and should not be stated as a unique or fully reproducible typology of the 8,666 images.
+Density clustering of DINOv3 CLS embeddings recovers a moderate number of recurring thumbnail regimes without using titles or VLM labels. The first-pass cut leaves a large unclustered remainder by design; successive peels show that some additional local structure exists among leftovers, alongside large mixed residuals. Residual CLS (Stage 1) is a second layer on leftover appearance, not leftover images; the operating cut is the leaf run, not the two-cluster eom control. Because UMAP+HDBSCAN partitions are seed-sensitive on this corpus, claims about specific visual types should be grounded in the seed-42 montages of the working cut (and, where grids support it, in the smaller peel folders and the residual-leaf keep list), and should not be stated as a unique or fully reproducible typology of the 8,666 images.

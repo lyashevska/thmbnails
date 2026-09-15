@@ -101,6 +101,25 @@ python src/dinov3/cluster_cls_peel.py \
 
 Combined (`nopca-n15-mcs20-ms20-peels/`): **53** cluster ids, **8,034** assigned (92.7%), **632** still noise (7.3%). Round 0 remains the primary taxonomy (5,108 images). Round 1 residual pile is folder **3** (combined id **36**; 1,402 images, 39.4% of r1). Round 0 folders **0** and **18** (741 and 842) are oversized mixed groups. Inspect `samples/cluster_*/_grid.jpg` on r1 (other than 3) and r2 before naming extra types.
 
+**Residual CLS (Stage 1).** Subtract the parent-cluster mean in raw 1024-d CLS (noise: nearest centroid), L2-normalise, refit UMAP+HDBSCAN on all 8,666 images. The **operating cut is leaf**, `min_samples=10`. Inherited eom / `min_samples=20` is a control: it collapses to illustrated vs live-action and is not used.
+
+```bash
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 \
+  --hdbscan-selection-method leaf --hdbscan-min-samples 10 \
+  --run-id nopca-n15-mcs20-ms20-residual-leaf
+
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20
+```
+
+| Role | Run | Folder | Clusters | Noise | DBCV / silhouette |
+|------|-----|--------|---------:|------:|-------------------|
+| **Operating Stage 1** | leaf, ms=10 | `nopca-n15-mcs20-ms20-residual-leaf/` | 68 | 56.2% (4,868) | 0.19 / 0.51 |
+| Control (not used) | inherited knobs (eom, ms=20) | `nopca-n15-mcs20-ms20-residual/` | 2 (708, 7,958) | 0% | 0.71 / 0.60 |
+
+Leaf: 3,798 assigned; median residual group mixes 6 parent ids (median majority-parent fraction 0.62). Mixed grids share clothing, body, or couple composition across parent sets. Unmixed residual groups still track parent 0 (drawing medium) or parent 18 (close-up). Review `samples/cluster_*/_grid.jpg` and `parent_residual_mix.csv`. Keep / skip list: [cls_residual_stage1.md](cls_residual_stage1.md). The control run’s residual 0 is 98% parent 0 (illustrated vs the rest).
+
 #### Companion / older CLS cluster runs
 
 | Role | Method | Run folder | Clusters | Noise |

@@ -246,6 +246,34 @@ python src/dinov3/cluster_cls_peel.py \
 
 Writes `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20-r1/` (same files as `cluster_cls.py`) and `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20-peels/combined_assignments.csv` (`cluster_id` offset across rounds, plus `round` / `cluster_id_in_round`). Remaining noise stays `-1`. UMAP coordinates on peeled rows are from that round’s map, not the parent’s. Combined: 53 cluster ids, 8,034 assigned, 632 remaining noise.
 
+#### Residual CLS (Stage 1: leftover appearance, not leftover images)
+
+Peel refits on ungrouped thumbnails. Residual clustering keeps every image, subtracts the parent-cluster mean in raw 1024-d CLS (ungrouped images use the nearest centroid), L2-normalises, and refits UMAP+HDBSCAN. `cluster_id` is the residual label; `parent_cluster_id` is the parent cut. The **operating Stage 1 cut is leaf**, `min_samples=10`. Optional control: drop the first global PCs instead of per-cluster means.
+
+```bash
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 \
+  --hdbscan-selection-method leaf --hdbscan-min-samples 10 \
+  --run-id nopca-n15-mcs20-ms20-residual-leaf --dry-run
+
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 \
+  --hdbscan-selection-method leaf --hdbscan-min-samples 10 \
+  --run-id nopca-n15-mcs20-ms20-residual-leaf
+```
+
+Writes `data/dinov3_cls_clusters/nopca-n15-mcs20-ms20-residual-leaf/`. Review `samples/cluster_*/_grid.jpg`: a useful residual group mixes parent clusters and shares something else. `parent_residual_mix.csv` is the parent×residual mixing table. Keep / skip list: [docs/cls_residual_stage1.md](docs/cls_residual_stage1.md).
+
+Inherited eom / `min_samples=20` (default CLI, folder `-residual`) collapses to two groups (illustrated vs the rest) and is not used. PCA deflate is a separate control:
+
+```bash
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20
+
+python src/dinov3/cluster_cls_residual.py \
+  --from-clusters-run-id nopca-n15-mcs20-ms20 --deflate pca --pca-deflate 3
+```
+
 Same protocol on the PCA-first cut A:
 
 ```bash
