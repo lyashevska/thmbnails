@@ -1,7 +1,7 @@
 """
 DINOv3 clustering library (CLS thumbnails and patch tokens).
 
-CLIs: cluster_cls.py, cluster_patch.py.
+CLIs: cluster_cls.py, cluster_cls_peel.py, cluster_cls_residual.py, cluster_patch.py.
 """
 
 from __future__ import annotations
@@ -140,6 +140,84 @@ def load_cluster_run(run_dir: Path) -> Tuple[pd.DataFrame, Dict[str, Any]]:
 def noise_image_ids(assignments: pd.DataFrame) -> List[str]:
     noise = assignments[assignments["cluster_id"] == -1]
     return [str(i) for i in noise["image_id"].tolist()]
+
+
+def l2_normalize_rows(x: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    x = np.asarray(x, dtype=np.float64)
+    norms = np.linalg.norm(x, axis=1, keepdims=True)
+    return x / np.maximum(norms, eps)
+
+
+@dataclass
+class ResidualClsResult:
+    residuals: np.ndarray
+    deflate_cluster_id: np.ndarray
+    mean_cluster_ids: np.ndarray
+    means: np.ndarray
+
+
+def residual_from_parent_means(
+    embeddings: np.ndarray,
+    labels: np.ndarray,
+) -> ResidualClsResult:
+    """Subtract parent-cluster mean in raw CLS; noise uses nearest centroid (cosine).
+
+    Residuals are L2-normalised. Do this in the original embedding space, not UMAP.
+    """
+    embeddings = np.asarray(embeddings, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.int64)
+    if embeddings.shape[0] != labels.shape[0]:
+        raise ValueError(
+            f"embeddings rows ({embeddings.shape[0]}) != labels ({labels.shape[0]})"
+        )
+    mean_ids = np.array(sorted(set(labels.tolist()) - {-1}), dtype=np.int64)
+    if mean_ids.size == 0:
+        raise ValueError("need at least one assigned parent cluster to deflate")
+
+    means = np.stack([embeddings[labels == c].mean(axis=0) for c in mean_ids])
+    residuals = embeddings.copy()
+    deflate = np.full(len(labels), -1, dtype=np.int64)
+
+    assigned = labels >= 0
+    id_to_row = {int(c): i for i, c in enumerate(mean_ids)}
+    assigned_rows = np.array([id_to_row[int(y)] for y in labels[assigned]], dtype=np.int64)
+    residuals[assigned] = embeddings[assigned] - means[assigned_rows]
+    deflate[assigned] = labels[assigned]
+
+    noise = ~assigned
+    if noise.any():
+        x_n = l2_normalize_rows(embeddings[noise])
+        mu_n = l2_normalize_rows(means)
+        nearest = np.argmax(x_n @ mu_n.T, axis=1)
+        residuals[noise] = embeddings[noise] - means[nearest]
+        deflate[noise] = mean_ids[nearest]
+
+    return ResidualClsResult(
+        residuals=l2_normalize_rows(residuals),
+        deflate_cluster_id=deflate,
+        mean_cluster_ids=mean_ids,
+        means=means,
+    )
+
+
+def residual_from_global_pca(
+    embeddings: np.ndarray,
+    *,
+    n_components: int = 3,
+    seed: int = 42,
+) -> Tuple[np.ndarray, int, float]:
+    """Remove the first global PCs from every CLS vector, then L2-normalise."""
+    _require_cluster_deps()
+    embeddings = np.asarray(embeddings, dtype=np.float64)
+    if n_components < 1:
+        raise ValueError("n_components must be >= 1")
+    n_comp = min(n_components, embeddings.shape[0], embeddings.shape[1])
+    pca = PCA(n_components=n_comp, random_state=seed)
+    scores = pca.fit_transform(embeddings)
+    recon = scores @ pca.components_ + pca.mean_
+    residuals = l2_normalize_rows(embeddings - recon)
+    explained = float(np.sum(pca.explained_variance_ratio_))
+    return residuals, n_comp, explained
 
 
 def subset_embeddings(
